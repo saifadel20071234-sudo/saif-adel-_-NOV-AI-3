@@ -17,6 +17,24 @@ import time
 from collections import deque
 from dataclasses import dataclass, field
 
+import os
+import json
+import joblib
+import numpy as np
+os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
+import tensorflow as tf
+
+# Load AI Models
+try:
+    occupancy_model = joblib.load("../models/occupancy_classifier.joblib")
+    autoencoder = tf.keras.models.load_model("../models/tile_anomaly_autoencoder.keras")
+    anomaly_scaler = joblib.load("../models/anomaly_scaler.joblib")
+    anomaly_cfg = json.load(open("../models/anomaly_config.json"))
+    AI_AVAILABLE = True
+except Exception as e:
+    print(f"Warning: AI Models not loaded. Fallback to simulation. Error: {e}")
+    AI_AVAILABLE = False
+
 
 # ============================================================
 # إعدادات المحاكاة (Simulation Configuration)
@@ -153,9 +171,21 @@ class PowerStepSimulator:
     # -------------------------------------------------------
     def _simulate_occupancy_and_loads(self, dt_min):
         s = self.state
-        # استشعار الإشغال عبر محاكاة تذبذب إشارة الواي فاي (RSSI) — احتمالية مبنية على كثافة الحركة
-        occupancy_prob = min(0.97, s.footfall_now / 25.0)
-        s.occupancy = random.random() < occupancy_prob
+        
+        # محاكاة إشارة الواي فاي (RSSI) وتمريرها لموديل الذكاء الاصطناعي
+        base_rssi = -70
+        rssi_noise = s.footfall_now * 2.0
+        rssi_vals = [base_rssi + random.uniform(-rssi_noise, rssi_noise) for _ in range(5)]
+        
+        if AI_AVAILABLE:
+            arr = np.array(rssi_vals)
+            feats = np.array([[arr.mean(), arr.std(), arr.min(), arr.max(),
+                               arr.max() - arr.min(), np.mean(np.abs(np.diff(arr)))]])
+            state = occupancy_model.predict(feats)[0]
+            s.occupancy = (state != "empty")
+        else:
+            occupancy_prob = min(0.97, s.footfall_now / 25.0)
+            s.occupancy = random.random() < occupancy_prob
 
         led_on = s.occupancy
         charging_on = s.storage_soc_wh > (STORAGE_CAPACITY_WH * 0.8)
@@ -199,10 +229,24 @@ class PowerStepSimulator:
         s = self.state
         alerts = []
 
-        for tile in s.tiles:
-            if tile.efficiency < 0.80:
-                drop = round((1 - tile.efficiency) * 100)
-                alerts.append({"level": "warning", "text": f"بلاطة #{tile.id}: تراجع في الأداء (-{drop}%) — يُنصح بالفحص"})
+        if AI_AVAILABLE:
+            # استدعاء الموديل (Autoencoder) لكشف الأعطال المخفية
+            try:
+                # توليد بيانات طاقة لتمريرها للموديل
+                tile_powers = {str(t.id): t.step_energy_j(ENERGY_PER_STEP_J) * t.efficiency for t in s.tiles}
+                row = np.array([[tile_powers.get(str(c), 0.0) for c in anomaly_cfg["columns"]]])
+                X_anom = anomaly_scaler.transform(row)
+                recon = autoencoder.predict(X_anom, verbose=0)
+                error = float(np.mean(np.square(X_anom - recon)))
+                if error > anomaly_cfg["threshold"]:
+                    alerts.append({"level": "danger", "text": f"[AI Alert] كشف شذوذ غير طبيعي في كفاءة التوليد (Error: {error:.2f})"})
+            except Exception as e:
+                pass
+        else:
+            for tile in s.tiles:
+                if tile.efficiency < 0.80:
+                    drop = round((1 - tile.efficiency) * 100)
+                    alerts.append({"level": "warning", "text": f"بلاطة #{tile.id}: تراجع في الأداء (-{drop}%) — يُنصح بالفحص"})
 
         if s.storage_soc_wh > STORAGE_CAPACITY_WH * 0.9:
             alerts.append({"level": "info", "text": "وحدة التخزين قاربت على الامتلاء الكامل"})
