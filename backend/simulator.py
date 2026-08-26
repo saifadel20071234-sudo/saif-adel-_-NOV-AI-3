@@ -284,7 +284,8 @@ class PowerStepSimulator:
             "loads": s.loads,
             "alerts": s.alerts,
             "tiles": [{"id": t.id, "efficiency_pct": round(t.efficiency * 100, 1),
-                       "cumulative_wh": round(t.cumulative_wh, 4)} for t in s.tiles],
+                       "cumulative_wh": round(t.cumulative_wh, 4),
+                       "stepped_on": random.random() < min(s.footfall_now / 30.0, 0.4)} for t in s.tiles],
         }
 
     def history(self) -> dict:
