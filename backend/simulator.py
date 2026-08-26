@@ -18,6 +18,7 @@ from collections import deque
 from dataclasses import dataclass, field
 
 import os
+import sqlite3
 import json
 import joblib
 import numpy as np
@@ -111,8 +112,51 @@ class PowerStepSimulator:
 
     def __init__(self):
         self.state = SimState()
+        
+        # 1. إعداد قاعدة البيانات (Setup DB)
+        self.db = sqlite3.connect("../energy_system.db", check_same_thread=False)
+        self.db.execute('''
+            CREATE TABLE IF NOT EXISTS system_metrics (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                sim_time TEXT,
+                sim_hour REAL,
+                cumulative_gen_wh REAL,
+                cumulative_con_wh REAL,
+                soc_wh REAL,
+                footfall REAL,
+                ts DATETIME DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
+        self.db.commit()
+        
+        # 2. استرجاع التاريخ من الداتابيز عشان الرسم البياني ميبدأش من الصفر
+        try:
+            cursor = self.db.execute(
+                "SELECT sim_hour, cumulative_gen_wh, cumulative_con_wh, soc_wh, footfall "
+                "FROM system_metrics ORDER BY id DESC LIMIT ?", (HISTORY_MAXLEN,)
+            )
+            rows = cursor.fetchall()
+            
+            if rows:
+                # تحديث الحالة الحالية عشان نكمل المحاكاة من مكان ما وقفت
+                last_row = rows[0]
+                self.state.sim_hour = float(last_row[0])
+                self.state.cumulative_gen_wh = float(last_row[1])
+                self.state.cumulative_con_wh = float(last_row[2])
+                self.state.storage_soc_wh = float(last_row[3])
+                
+                # تعبئة الـ Deques (بترتيب عكسي عشان نرجع ترتيب الزمن الصح)
+                for row in reversed(rows):
+                    self.state.history_t.append(round(row[0], 3))
+                    self.state.history_gen.append(round(row[1], 4))
+                    self.state.history_con.append(round(row[2], 4))
+                    self.state.history_soc.append(round(row[3], 4))
+                    self.state.history_footfall.append(round(row[4], 1))
+        except Exception as e:
+            print(f"Error loading history from DB: {e}")
+        
         self._last_real_time = time.time()
-        self._elapsed_sim_seconds_today = 0.0
+        self._elapsed_sim_seconds_today = (self.state.sim_hour - DAY_START_HOUR) * 3600.0
 
     # -------------------------------------------------------
     def tick(self):
@@ -228,6 +272,19 @@ class PowerStepSimulator:
         s.history_con.append(round(s.cumulative_con_wh, 4))
         s.history_soc.append(round(s.storage_soc_wh, 4))
         s.history_footfall.append(round(s.footfall_now, 1))
+
+        # Database Logging: حفظ كل دقيقة محاكاة في قاعدة البيانات
+        try:
+            hh = int(s.sim_hour) % 24
+            mm = int((s.sim_hour % 1) * 60)
+            sim_time_str = f"{hh:02d}:{mm:02d}"
+            self.db.execute(
+                "INSERT INTO system_metrics (sim_time, sim_hour, cumulative_gen_wh, cumulative_con_wh, soc_wh, footfall) VALUES (?, ?, ?, ?, ?, ?)",
+                (sim_time_str, s.sim_hour, s.cumulative_gen_wh, s.cumulative_con_wh, s.storage_soc_wh, s.footfall_now)
+            )
+            self.db.commit()
+        except Exception as e:
+            print(f"DB Error: {e}")
 
         if AI_AVAILABLE:
             # تغذية موديل LSTM بآخر 30 قراءة للطاقة (بالميللي واط)
