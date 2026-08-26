@@ -1,195 +1,69 @@
-# ⚡ PowerStep — نظام إدارة الطاقة والإشغال الذكي
+# ⚡ PowerStep Grid — AI-Powered Smart Floor System
 
-![Status](https://img.shields.io/badge/status-prototype-yellow)
-![License](https://img.shields.io/badge/license-MIT-blue)
-![Python](https://img.shields.io/badge/python-3.10%2B-blue)
-![Platform](https://img.shields.io/badge/platform-ESP32-000000)
+مرحباً بك في المستودع الرسمي لمشروع **PowerStep Grid**. 
+هذا المشروع عبارة عن نظام متكامل (أرضية ذكية لتوليد الطاقة) يدمج بين محاكاة الفيزياء، تحليل البيانات، وثلاثة نماذج ذكاء اصطناعي (AI) تعمل في الوقت الفعلي لاكتشاف الأعطال، تحديد معدل الإشغال، والتنبؤ بمستقبل توليد الطاقة.
 
-> نظام هجين IoT × AI لحصاد الطاقة الحركية من خطوات المشاة عبر بلاط بيزوكهربائي، واستشعار الإشغال بدون أي حساسات مادية عبر تذبذب إشارة الواي فاي (RSSI)، مع خط بيانات كامل، ثلاثة نماذج ذكاء اصطناعي (تصنيف إشغال، تنبؤ بالطاقة، كشف شذوذ للصيانة التنبؤية)، لوحة تحكم حية، ونظام إنذار فوري متعدد القنوات.
-
-**English:** A hybrid IoT + AI energy system harvesting kinetic energy from footsteps via piezoelectric floor tiles, sensing occupancy through WiFi RSSI fluctuation (no cameras, no PIR sensors), with a full data pipeline, three AI models (occupancy classification, LSTM energy forecasting, autoencoder-based anomaly/predictive-maintenance detection), a live Streamlit dashboard, and multi-channel real-time alerting (Telegram / Email / on-device buzzer).
-
-Developed by **NovAI team** 
+🔗 **رابط المستودع (GitHub):** [PowerStep Grid Repository](https://github.com/saifadel20071234-sudo/saif-adel-_-NOV-AI-3.git)
 
 ---
 
-## 🧭 نظرة عامة
+## 🛠️ المتطلبات الأساسية (Prerequisites)
 
-المشروع يعالج مشكلتين معًا: هدر الطاقة الحركية الناتجة عن الخطوات في الممرات، والقصور التقليدي في استشعار الإشغال (حساسات PIR تفشل مع الأشخاص الساكنين، والكاميرات تثير مخاوف خصوصية). الحل: بلاط بيزوكهربائي لحصاد الطاقة + عقدة ESP32 تقرأ تذبذب إشارة الواي فاي الموجودة أصلًا في المبنى لتحديد الإشغال بدقة — مغذّى بخط بيانات ونماذج ذكاء اصطناعي فعلية قابلة للتشغيل والتدريب، وليس مجرد عرض توضيحي.
+لتشغيل هذا المشروع على جهازك المحلى، ستحتاج إلى إعداد بيئة العمل التالية:
 
-> 🔒 **خصوصية:** استشعار الواي فاي يقيس فقط قوة الإشارة الوصفية (RSSI) دون فك حزم البيانات أو تخزين عناوين MAC لأي جهاز — لا تُجمع أي بيانات شخصية.
-
----
-
-## ✨ الميزات الرئيسية
-
-- 🔋 حصاد طاقة حركي هجين مع الشبكة العامة.
-- 📡 استشعار إشغال لاسلكي (WiFi RSSI) بدون عتاد إضافي وبدون كاميرات.
-- 🧪 **توأم رقمي (Digital Twin)** — `simulate_sensors.py` يشغّل كل المنظومة بدون أي بلاط فعلي.
-- 🗄️ خط بيانات كامل: MQTT → SQLite/CSV → Parquet.
-- 🤖 تصنيف حالة الإشغال (Random Forest / SVM).
-- 🔮 تنبؤ بالطاقة القادمة بشبكة LSTM.
-- 🚨 كشف شذوذ بـ Autoencoder للصيانة التنبؤية وكشف تسريب الطاقة.
-- 🧠 محرك استدلال لحظي يربط النماذج الثلاثة بقرار تحكم فعلي في الأحمال.
-- 📊 لوحة تحكم حية (Streamlit) + رمز QR لمتابعة اللجنة من موبايلاتهم مباشرة.
-- 🔔 إنذار فوري متعدد القنوات: قاعدة بيانات + Telegram + Email + بازر فعلي على العتاد.
-- 💰 حاسبة توفير مالي وبيئي (تعريفة الكهرباء + معامل انبعاث CO₂).
+- **نسخة بايثون (Python Version):** يُفضل استخدام `Python 3.10` أو أحدث.
+- **المكتبات المطلوبة (Libraries):**
+  يمكنك تثبيت جميع المكتبات مرة واحدة عبر الأمر `pip install -r requirements.txt`، وتشمل:
+  - `fastapi` & `uvicorn` (لإنشاء السيرفر وربط الواجهة)
+  - `tensorflow` أو `keras` (لتشغيل نماذج الذكاء الاصطناعي LSTM و Autoencoder)
+  - `scikit-learn` & `joblib` (لنماذج التصنيف RF/SVM ومعالجة البيانات)
+  - `pandas` & `numpy` (لتحليل وتجهيز البيانات)
 
 ---
 
-## 🏗️ مخطط تدفق النظام
+## 🚀 كيفية التثبيت والتشغيل (How to Run)
 
-```
-[Piezo Tiles / simulate_sensors.py] --MQTT--> [Mosquitto Broker] --> [ingest.py] --> [SQLite + CSV]
-[WiFi RSSI Node]                    --MQTT-->        │
-                                                      ▼
-                                           [clean_data.py] --> [Parquet نظيف]
-                                                      │
-                ┌─────────────────────────────────────┼──────────────────────────────────┐
-                ▼                                     ▼                                  ▼
-   [train_occupancy_classifier.py]        [train_lstm_forecast.py]        [train_autoencoder_anomaly.py]
-                └─────────────────────────────────────┬──────────────────────────────────┘
-                                                       ▼
-                                        [realtime_inference.py] ◄──MQTT── بيانات الحساسات الخام
-                                            │                    │
-                                     قرار تحكم بالأحمال     كشف شذوذ / تنبؤ
-                                            │                    │
-                                  [actuators/relay/*]   [alert_manager.py] → Telegram/Email/Buzzer
-                                                       │
-                                                [dashboard.py]
-```
+1. **تحميل المشروع:** قم بتحميل المشروع من جيت هاب باستخدام الأمر:
+   ```bash
+   git clone https://github.com/saifadel20071234-sudo/saif-adel-_-NOV-AI-3.git
+   ```
+2. **تشغيل النظام:**
+   فقط اضغط مرتين على ملف التشغيل السريع:
+   - 💻 `4_Run_All_AI_Web.bat`
+   
+   سيقوم هذا الملف بـ:
+   - تفعيل السيرفر الذكي (`backend/app.py`).
+   - تشغيل سكربت `wait_and_open.py` الذي سيفتح المتصفح تلقائياً على لوحة التحكم (Sci-Fi Dashboard) بمجرد تحميل موديلات الذكاء الاصطناعي بنجاح.
 
 ---
 
-## 📂 هيكل المستودع
+## 📂 دليل ملفات المشروع (Project Structure & Details)
 
-```
-PowerStep/
-├── esp32_main.ino                    # الفيرموير النهائي المدمج (طاقة + RSSI + إنذار)
-├── simulate_sensors.py               # التوأم الرقمي — تجربة كاملة بدون بلاط فعلي
-├── ingest.py                         # استقبال MQTT وتخزين في SQLite + نسخة CSV
-├── fetch_data.py                     # سحب البيانات وتصديرها إلى Parquet
-├── clean_data.py                     # تنظيف، فلترة، هندسة خصائص
-├── train_occupancy_classifier.py     # ML: Random Forest / SVM لتصنيف الإشغال
-├── train_lstm_forecast.py            # DL: LSTM للتنبؤ بالطاقة
-├── train_autoencoder_anomaly.py      # DL: Autoencoder لكشف الشذوذ/الصيانة التنبؤية
-├── realtime_inference.py             # محرك الاستدلال اللحظي (يربط كل النماذج بالتحكم)
-├── alert_manager.py                  # محرك الإنذار (DB + Telegram + Email + Buzzer)
-├── dashboard.py                      # لوحة التحكم الحية (Streamlit)
-├── generate_qr.py                    # توليد رمز QR لعرض اللوحة على موبايل اللجنة
-├── requirements.txt
-├── models/                           # تُنشأ تلقائيًا بعد التدريب (.joblib / .keras / .json)
-├── data/                             # تُنشأ تلقائيًا (energy_system.db, *.parquet, raw_backup.csv)
-├── docs/
-│   └── Smart_Energy_System_Roadmap.md   # خارطة الطريق التفصيلية الكاملة لكل مرحلة
-└── README.md
-```
+إليك شرح مفصل لوظيفة كل ملف داخل المشروع:
 
----
+### 1️⃣ ملفات التشغيل المباشرة (Launchers)
+- **`4_Run_All_AI_Web.bat`**: زر التشغيل السحري! يجمع كل شيء معاً (يشغل السيرفر، يجهز الذكاء الاصطناعي، ويفتح الواجهة الأمامية).
+- **`wait_and_open.py`**: سكربت ذكي جداً يعمل في الخلفية وقت التشغيل. يقوم بفحص السيرفر كل ثانية ويفتح المتصفح فقط عندما يكون السيرفر جاهزاً بنسبة 100%، لمنع أخطاء (Connection Refused).
+- **`1_Train_Models.bat`**: ملف تشغيل لتدريب كل نماذج الذكاء الاصطناعي مرة واحدة من الصفر بناءً على البيانات الموجودة.
 
-## 🧰 التقنيات المستخدمة
+### 2️⃣ واجهة المستخدم والسيرفر (Frontend & Backend)
+- **`frontend/index.html`**: الواجهة الأمامية للمشروع (Sci-Fi Dashboard). صُممت بتصميم ليلي زجاجي (Glassmorphism & Neon). تحتوي على رسوم بيانية (Chart.js) وخريطة حرارية حية (Live Heatmap) تضيء عند حركة الأقدام.
+- **`backend/app.py`**: السيرفر الأساسي (FastAPI). وظيفته الربط بين الواجهة الأمامية (التي تطلب البيانات) ومحرك المحاكاة. (وهو مجهز لاحقاً لاستقبال قراءات الهاردوير الحقيقي ESP32 عبر `/api/ingest`).
+- **`backend/simulator.py`**: العقل المدبر والمحرك الفيزيائي! هذا الملف:
+  - يحاكي حركة الأقدام وتوليد الكهرباء.
+  - يستدعي الثلاث نماذج AI في الوقت الفعلي لتحليل البيانات.
+  - يحفظ كل البيانات بشكل دائم في قاعدة البيانات (`energy_system.db`) لضمان عدم ضياع التاريخ عند إعادة التشغيل.
 
-| الفئة | الأدوات |
-|---|---|
-| العتاد | ESP32 (×2), أقراص بيزوكهربائية, قنطرة توحيد RB153, موسفيت IRF520N/ريليه, مكثفات فائقة, حساس تيار ACS712 |
-| النقل | MQTT (Mosquitto) |
-| التخزين | SQLite, CSV, Apache Parquet |
-| تعلّم الآلة | scikit-learn (Random Forest, SVM) |
-| التعلّم العميق | TensorFlow / Keras (LSTM, Autoencoder) |
-| اللوحة | Streamlit, Plotly, streamlit-autorefresh |
-| الإنذار | Telegram Bot API, SMTP (Email), MQTT |
-| أخرى | qrcode, matplotlib, seaborn |
-| اللغات | C++ (Arduino) · Python 3.10+ |
+### 3️⃣ قواعد البيانات والبيانات (Data & DB)
+- **`energy_system.db`**: قاعدة بيانات (SQLite) متكاملة. تسجل كل نبضة طاقة في النظام للحفاظ على التاريخ (History) واستئناف الرسم البياني من نقطة التوقف بدلاً من البدء من الصفر.
+- **ملفات الـ `.parquet`**: ملفات بيانات ضخمة (Big Data) مضغوطة تم توليدها لمحاكاة قراءات الحساسات والطاقة لتدريب الذكاء الاصطناعي.
+
+### 4️⃣ نماذج الذكاء الاصطناعي (AI Training Scripts)
+المشروع يحتوي على عدة سكربتات مسؤولة عن تدريب الـ AI قبل استخدامه:
+- **`generate_training_data.py` & `clean_data.py`**: لتوليد وتنظيف البيانات الوهمية الخاصة بالتدريب.
+- **`train_occupancy_classifier.py`**: يدرب موديل (Random Forest / SVM) ليقرر ما إذا كان هناك "شخص بالغ"، "طفل"، أو "عربة/جماد" يمر على البلاط بناءً على قوة الإشارة (RSSI).
+- **`train_autoencoder_anomaly.py`**: يدرب شبكة عصبية (Autoencoder) لتتعلم شكل "الطاقة الطبيعية". وأثناء التشغيل المباشر لو حدث هبوط مفاجئ في كفاءة البلاط، يكتشفها الموديل كـ "عطل" ويصدر إنذاراً.
+- **`train_lstm_forecast.py`**: يدرب شبكة عصبية عميقة (LSTM) لدراسة سلسلة الطاقة الزمنية وتوقع كمية الواط التي ستُنتج في المستقبل.
 
 ---
-
-## 🚀 التشغيل السريع
-
-```bash
-# 1) الاستنساخ والتثبيت
-git clone https://github.com/ahmedhhisham/PowerStep.git
-cd PowerStep
-python3 -m venv venv && source venv/bin/activate
-pip install -r requirements.txt --break-system-packages
-
-# 2) تشغيل وسيط MQTT محليًا
-sudo apt install mosquitto mosquitto-clients
-sudo systemctl enable --now mosquitto
-# أو: docker run -it -p 1883:1883 eclipse-mosquitto
-
-# 3) تشغيل خدمة التخزين
-python ingest.py
-
-# 4) تشغيل مصدر البيانات — اختر واحدًا
-python simulate_sensors.py        # بدون أي عتاد فعلي (التوأم الرقمي)
-# أو ارفع esp32_main.ino على العتاد الحقيقي عبر Arduino IDE
-
-# 5) بعد تجميع بيانات كافية
-python clean_data.py
-python train_occupancy_classifier.py
-python train_lstm_forecast.py
-python train_autoencoder_anomaly.py
-
-# 6) محرك الاستدلال اللحظي (يستدعي alert_manager تلقائيًا)
-python realtime_inference.py
-
-# 7) لوحة التحكم
-streamlit run dashboard.py --server.address 0.0.0.0
-
-# 8) رمز QR للعرض الحي
-python generate_qr.py
-```
-
-### متغيرات البيئة (اختيارية — لقنوات الإنذار)
-
-```bash
-export TELEGRAM_BOT_TOKEN="..."
-export TELEGRAM_CHAT_ID="..."
-export ALERT_EMAIL="you@example.com"
-export SMTP_USER="..."
-export SMTP_PASS="..."
-```
-
----
-
-## 🧪 تجربة المشروع بدون بلاط حقيقي
-
-`simulate_sensors.py` ينشر بيانات صناعية على نفس مواضيع MQTT التي يستخدمها العتاد الحقيقي بالضبط، فتعمل كل الطبقات اللاحقة دون انتظار جاهزية البلاطة الميكانيكية. التفاصيل الكاملة (ومحاكاة هاردوير جزئية بزرار ضغط كبديل رخيص) في [`docs/Smart_Energy_System_Roadmap.md`](docs/Smart_Energy_System_Roadmap.md#3-تجربة-المشروع-بدون-بلاط-حقيقي-digital-twin--محاكاة-برمجية).
-
-> 💡 **نصيحة ليوم العرض:** أبقِ `simulate_sensors.py` جاهزًا كخطة بديلة فورية لو واجه العتاد الحي أي مشكلة تقنية لحظة التحكيم.
-
----
-
-## 📊 لوحة التحكم
-
-تعرض اللوحة: التوليد والاستهلاك اللحظي (مقاييس دائرية)، نسبة الاكتفاء الذاتي، حالة شحن التخزين (SoC)، رسم بياني للتوليد التراكمي، خريطة كثافة حركة (RSSI Heat Strip)، تحكمًا يدويًا بالأحمال، حاسبة التوفير المالي/البيئي، وسجل التنبيهات.
-
-> 📸 أضف لقطة شاشة من اللوحة هنا بعد أول تشغيل فعلي: `docs/images/dashboard.png`
-
----
-
-## 🔔 نظام الإنذار
-
-عند اكتشاف تسريب تيار (استهلاك رغم أن الحمل "OFF" رسميًا)، استهلاك زائد عن الطبيعي، أو انخفاض حرج في شحن التخزين، يُطلق `alert_manager.py` تنبيهًا فوريًا عبر: تسجيل في قاعدة البيانات (يظهر في اللوحة فورًا) + رسالة Telegram + بريد إلكتروني للحالات الحرجة + بازر فعلي على العتاد عبر MQTT.
-
----
-
-## 🗺️ خارطة الطريق الكاملة
-
-كل تفاصيل التخطيط، المشتريات، مخطط التوصيل، اختبار كل وحدة منفردة، والأكواد الكاملة لكل ملف مذكور أعلاه، موجودة خطوة بخطوة في: [`docs/Smart_Energy_System_Roadmap.md`](docs/Smart_Energy_System_Roadmap.md)
-
----
-
-## 🤝 المساهمة
-
-1. Fork المستودع.
-2. أنشئ فرعًا جديدًا: `git checkout -b feature/my-feature`.
-3. ارفع تعديلاتك: `git commit -m "وصف التعديل"`.
-4. أنشئ Pull Request مع شرح واضح للتغيير.
-
----
-
-## 🙌 شكر وتقدير
-
-- كلية الذكاء الاصطناعي — جامعة كفر الشيخ الأهلية (KNU).
-- مسابقة **RoboDam2026** على الفكرة الأساسية لحصاد الطاقة الحركية.
+*تم إعداد هذا التوثيق ليكون دليلاً شاملاً للمشروع وأكواد الذكاء الاصطناعي المدمجة به.*
