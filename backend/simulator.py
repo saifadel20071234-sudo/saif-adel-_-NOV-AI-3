@@ -30,6 +30,8 @@ try:
     autoencoder = tf.keras.models.load_model("../models/tile_anomaly_autoencoder.keras")
     anomaly_scaler = joblib.load("../models/anomaly_scaler.joblib")
     anomaly_cfg = json.load(open("../models/anomaly_config.json"))
+    lstm_model = tf.keras.models.load_model("../models/energy_forecast_lstm.keras")
+    energy_scaler = joblib.load("../models/energy_scaler.joblib")
     AI_AVAILABLE = True
 except Exception as e:
     print(f"Warning: AI Models not loaded. Fallback to simulation. Error: {e}")
@@ -99,6 +101,9 @@ class SimState:
     history_con: deque = field(default_factory=lambda: deque(maxlen=HISTORY_MAXLEN))
     history_soc: deque = field(default_factory=lambda: deque(maxlen=HISTORY_MAXLEN))
     history_footfall: deque = field(default_factory=lambda: deque(maxlen=HISTORY_MAXLEN))
+    
+    lstm_buffer: deque = field(default_factory=lambda: deque(maxlen=30))
+    forecast_w: float = 0.0
 
 
 class PowerStepSimulator:
@@ -224,6 +229,19 @@ class PowerStepSimulator:
         s.history_soc.append(round(s.storage_soc_wh, 4))
         s.history_footfall.append(round(s.footfall_now, 1))
 
+        if AI_AVAILABLE:
+            # تغذية موديل LSTM بآخر 30 قراءة للطاقة (بالميللي واط)
+            s.lstm_buffer.append(s.generation_w * 1000.0)
+            if len(s.lstm_buffer) == 30:
+                try:
+                    arr = np.array(s.lstm_buffer).reshape(-1, 1)
+                    seq = energy_scaler.transform(arr).reshape(1, 30, 1)
+                    pred_scaled = lstm_model.predict(seq, verbose=0)
+                    pred_mw = energy_scaler.inverse_transform(pred_scaled)[0][0]
+                    s.forecast_w = max(0.0, float(pred_mw) / 1000.0)
+                except Exception as e:
+                    pass
+
     # -------------------------------------------------------
     def _update_alerts(self):
         s = self.state
@@ -273,6 +291,7 @@ class PowerStepSimulator:
             "day": s.day_number,
             "sim_time": f"{hh:02d}:{mm:02d}",
             "generation_w": round(s.generation_w, 2),
+            "forecast_w": round(s.forecast_w, 2),
             "consumption_w": round(s.consumption_w, 2),
             "self_sufficiency_pct": round(min(self_sufficiency, 100), 1),
             "storage_soc_pct": round((s.storage_soc_wh / STORAGE_CAPACITY_WH) * 100, 1),

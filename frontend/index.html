@@ -215,6 +215,9 @@
       <div class="gauge" id="gaugeGen" style="--ring-color:var(--green); --pct:0;">
         <div class="val"><span id="genVal">0.0</span><small>واط</small></div>
       </div>
+      <div style="margin-top: 15px; text-align: center; font-size: 0.85rem; color: var(--green); text-shadow: 0 0 5px rgba(0,255,204,0.4);">
+        🔮 الـ AI يتوقع: <b id="forecastVal">0.0</b> واط
+      </div>
     </div>
     <div class="card gauge-wrap">
       <h3>الاستهلاك اللحظي</h3>
@@ -323,6 +326,10 @@ async function refreshLive(){
     document.getElementById('simTime').textContent = d.sim_time;
 
     setGauge('gaugeGen', d.generation_w * 10, 'genVal', d.generation_w.toFixed(1));
+    if (d.forecast_w !== undefined) {
+      document.getElementById('forecastVal').textContent = d.forecast_w.toFixed(1);
+    }
+    
     setGauge('gaugeCon', d.consumption_w * 10, 'conVal', d.consumption_w.toFixed(1));
     setGauge('gaugeSelf', d.self_sufficiency_pct, 'selfVal', Math.round(d.self_sufficiency_pct));
 
