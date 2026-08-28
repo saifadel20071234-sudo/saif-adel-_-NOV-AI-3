@@ -158,6 +158,17 @@ class PowerStepSimulator:
         self._last_real_time = time.time()
         self._elapsed_sim_seconds_today = (self.state.sim_hour - DAY_START_HOUR) * 3600.0
 
+    def inject_real_data(self, tile_id: int, voltage: float, current_ma: float, rssi: float):
+        """تحديث بيانات البلاطة من قراءات هاردوير حقيقية (Hybrid Mode)"""
+        for t in self.state.tiles:
+            if t.id == tile_id:
+                t.voltage = voltage
+                t.current_ma = current_ma
+                t.rssi = rssi
+                t.is_real_hardware = True
+                t.last_real_update = time.time()
+                break
+
     # -------------------------------------------------------
     def tick(self):
         now = time.time()
@@ -174,7 +185,7 @@ class PowerStepSimulator:
             self._start_new_day()
             return
 
-        self._simulate_tile_degradation(dt_sim_min)
+        self._simulate_tile_degradation(dt_min=dt_sim_min)
         self._simulate_generation(dt_sim_min)
         self._simulate_occupancy_and_loads(dt_sim_min)
         self._simulate_storage(dt_sim_min)
@@ -203,19 +214,34 @@ class PowerStepSimulator:
     # -------------------------------------------------------
     def _simulate_generation(self, dt_min):
         s = self.state
-        rate = footfall_rate(s.sim_hour)
-        steps_this_tick = max(0, random.gauss(rate * dt_min, math.sqrt(max(rate * dt_min, 0.01))))
+        base_rate = footfall_rate(s.sim_hour)
+        steps_this_tick = max(0, random.gauss(base_rate * dt_min, math.sqrt(max(base_rate * dt_min, 0.01))))
         s.footfall_now = steps_this_tick / max(dt_min, 1e-6)  # steps/min تقريبي للعرض
-
-        total_energy_j = 0.0
+        
+        total_energy_wh = 0.0
+        
         for tile in s.tiles:
+            # Hybrid Mode: Skip simulation if real hardware is sending data
+            if tile.is_real_hardware:
+                if time.time() - tile.last_real_update < 5.0:
+                    power_w = tile.voltage * (tile.current_ma / 1000.0)
+                    energy_wh = power_w * (dt_min / 60.0)
+                    tile.cumulative_wh += energy_wh
+                    total_energy_wh += energy_wh
+                    continue
+                else:
+                    # Timeout! Hardware disconnected, revert to simulation
+                    tile.is_real_hardware = False
+            
+            # Normal Simulation
             share = steps_this_tick / NUM_TILES
-            total_energy_j += tile.step_energy_j(ENERGY_PER_STEP_J) * share
-            tile.cumulative_wh += (tile.step_energy_j(ENERGY_PER_STEP_J) * share) / 3600.0
+            sim_energy_j = tile.step_energy_j(ENERGY_PER_STEP_J) * share
+            sim_energy_wh = sim_energy_j / 3600.0
+            tile.cumulative_wh += sim_energy_wh
+            total_energy_wh += sim_energy_wh
 
-        energy_wh = total_energy_j / 3600.0
-        s.generation_w = (energy_wh / max(dt_min / 60.0, 1e-9)) if dt_min > 0 else 0.0
-        s.cumulative_gen_wh += energy_wh
+        s.generation_w = (total_energy_wh / max(dt_min / 60.0, 1e-9)) if dt_min > 0 else 0.0
+        s.cumulative_gen_wh += total_energy_wh
 
     # -------------------------------------------------------
     def _simulate_occupancy_and_loads(self, dt_min):

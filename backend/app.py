@@ -71,19 +71,18 @@ def get_history():
 @app.post("/api/ingest")
 def ingest_real_reading(payload: dict):
     """
-    نقطة اتصال مستقبلية لاستقبال قراءات حقيقية من ESP32 فعلي.
-    شكل البيانات المتوقع (مثال):
-    {
-        "tile_id": 3,
-        "voltage": 4.2,
-        "current_ma": 12.5,
-        "rssi": -63
-    }
-    حاليًا الدالة دي مجرد "هيكل جاهز" (Stub) — لسه مش متفعّلة عمليًا لأننا
-    في مرحلة السيميوليشن. لما يجهز الهاردوير، هنملأ الدالة دي بمنطق يحدّث
-    حالة sim.state مباشرة من القراءة الحقيقية بدل المعادلات الرياضية.
+    استقبال قراءات حقيقية من ESP32 فعلي وتوجيهها للمحاكي الهجين.
     """
-    return {"status": "received_but_not_yet_active", "payload": payload}
+    tile_id = payload.get("tile_id")
+    if tile_id is not None:
+        voltage = payload.get("voltage", 0.0)
+        current_ma = payload.get("current_ma", 0.0)
+        rssi = payload.get("rssi", -90.0)
+        
+        sim.inject_real_data(tile_id, voltage, current_ma, rssi)
+        return {"status": "success", "message": f"Tile {tile_id} updated from hardware"}
+    
+    return {"status": "error", "message": "Missing tile_id"}
 
 
 # ============================================================
