@@ -57,6 +57,30 @@
   }
   header .dot{ width:9px; height:9px; border-radius:50%; background:var(--green); box-shadow:0 0 8px var(--green); }
   header .sim-time{ font-weight:700; color: #fff; }
+  .nav-links{ display:flex; gap:10px; margin-top:8px; }
+  .nav-links a{
+    color: var(--muted); text-decoration: none; padding: 7px 16px;
+    border-radius: 20px; font-size: .78rem; font-weight: 700;
+    border: 1px solid var(--line); transition: all 0.3s ease;
+  }
+  .nav-links a:hover, .nav-links a.active{
+    color: var(--green); border-color: var(--green);
+    box-shadow: 0 0 10px rgba(0,255,204,0.3);
+  }
+  .btn-export{
+    display:inline-flex; align-items:center; gap:8px;
+    padding:10px 22px; border-radius:12px; font-size:.82rem; font-weight:700;
+    border:none; cursor:pointer; color:#fff;
+    background:linear-gradient(135deg, var(--green-dark), #00796b);
+    border:1px solid var(--green);
+    box-shadow: 0 0 12px rgba(0,255,204,0.2);
+    transition: all 0.3s ease;
+    font-family:'Cairo',sans-serif; text-decoration:none;
+  }
+  .btn-export:hover{
+    box-shadow: 0 0 25px rgba(0,255,204,0.5);
+    transform: translateY(-2px);
+  }
 
   main{ padding:20px 26px 40px; max-width:1300px; margin:0 auto; }
 
@@ -206,6 +230,14 @@
     <span>اليوم <span id="dayNum" class="mono">1</span> — الساعة <span id="simTime" class="sim-time mono">--:--</span></span>
   </div>
 </header>
+
+<div style="max-width:1300px; margin:10px auto; padding:0 26px; display:flex; gap:10px; flex-wrap:wrap; align-items:center;">
+  <div class="nav-links">
+    <a href="/" class="active">🏠 لوحة التحكم</a>
+    <a href="/analytics.html">📊 التحليلات التاريخية</a>
+  </div>
+  <a class="btn-export" href="http://localhost:8000/api/export/csv" target="_blank">📥 تحميل تقرير CSV</a>
+</div>
 
 <main>
 
