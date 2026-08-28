@@ -235,6 +235,7 @@
   <div class="nav-links">
     <a href="/" class="active">🏠 لوحة التحكم</a>
     <a href="/analytics.html">📊 التحليلات التاريخية</a>
+    <a href="http://localhost:8000/docs" target="_blank" style="background: rgba(0, 204, 255, 0.2); border-color: #00ccff; color: #00ccff;">💻 توثيق المبرمجين (API)</a>
   </div>
   <a class="btn-export" href="http://localhost:8000/api/export/csv" target="_blank">📥 تحميل تقرير CSV</a>
 </div>
@@ -249,6 +250,9 @@
       </div>
       <div style="margin-top: 15px; text-align: center; font-size: 0.85rem; color: var(--green); text-shadow: 0 0 5px rgba(0,255,204,0.4);">
         🔮 الـ AI يتوقع: <b id="forecastVal">0.0</b> واط
+        <div style="margin-top:5px; font-size:0.75rem; color:#00ccff; text-shadow:none; padding:4px; background:rgba(0,204,255,0.1); border-radius:4px; border:1px solid rgba(0,204,255,0.3);">
+          🌍 منعنا انبعاث <b id="co2SavedVal">0.0</b> جم CO₂
+        </div>
       </div>
     </div>
     <div class="card gauge-wrap">
@@ -360,6 +364,12 @@ async function refreshLive(){
     setGauge('gaugeGen', d.generation_w * 10, 'genVal', d.generation_w.toFixed(1));
     if (d.forecast_w !== undefined) {
       document.getElementById('forecastVal').textContent = d.forecast_w.toFixed(1);
+    }
+    
+    // حساب انبعاثات الكربون التي تم توفيرها (تقريباً 0.4 جرام لكل وات ساعة)
+    if (d.cumulative_gen_wh !== undefined) {
+      const co2Grams = d.cumulative_gen_wh * 0.4;
+      document.getElementById('co2SavedVal').textContent = co2Grams.toFixed(2);
     }
     
     setGauge('gaugeCon', d.consumption_w * 10, 'conVal', d.consumption_w.toFixed(1));

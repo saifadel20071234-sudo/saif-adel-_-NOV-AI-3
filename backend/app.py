@@ -29,7 +29,7 @@ sim = PowerStepSimulator()
 # إعدادات الإيميل (اختياري — غيّرها لإعداداتك الحقيقية لتفعيل الإشعارات)
 EMAIL_ENABLED = True
 EMAIL_SENDER = "saifadel20071234@gmail.com"
-EMAIL_PASSWORD = "curp hpwb louu spf"
+EMAIL_PASSWORD = "rnnv vyoi cxju wrvd"
 EMAIL_RECEIVER = "saifadel20071234@gmail.com"
 SMTP_SERVER = "smtp.gmail.com"
 SMTP_PORT = 587
