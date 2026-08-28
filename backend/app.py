@@ -27,10 +27,10 @@ app.add_middleware(
 sim = PowerStepSimulator()
 
 # إعدادات الإيميل (اختياري — غيّرها لإعداداتك الحقيقية لتفعيل الإشعارات)
-EMAIL_ENABLED = False
-EMAIL_SENDER = "your_email@gmail.com"
-EMAIL_PASSWORD = "your_app_password"
-EMAIL_RECEIVER = "receiver@example.com"
+EMAIL_ENABLED = True
+EMAIL_SENDER = "saifadel20071234@gmail.com"
+EMAIL_PASSWORD = "curp hpwb louu spf"
+EMAIL_RECEIVER = "saifadel20071234@gmail.com"
 SMTP_SERVER = "smtp.gmail.com"
 SMTP_PORT = 587
 
