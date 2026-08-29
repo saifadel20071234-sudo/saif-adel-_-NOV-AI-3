@@ -12,6 +12,8 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, StreamingResponse
+import paho.mqtt.client as mqtt
+import json
 
 from simulator import PowerStepSimulator
 
@@ -40,6 +42,38 @@ ALERT_COOLDOWN_SECONDS = 300  # 5 دقائق بين كل إشعار
 
 
 # ============================================================
+# اتصال MQTT مع الهاردوير الحقيقي
+# ============================================================
+mqtt_client = mqtt.Client()
+
+def on_mqtt_message(client, userdata, msg):
+    try:
+        payload = json.loads(msg.payload.decode())
+        if msg.topic.startswith("energy/tiles/"):
+            tile_id_str = payload.get("tile_id", "").replace("tile_", "")
+            if tile_id_str.isdigit():
+                power_mw = payload.get("power_mw", 0)
+                steps = payload.get("steps", 0)
+                sim.inject_real_data(int(tile_id_str), 5.0, power_mw / 5.0, -50.0, steps)
+        elif msg.topic.startswith("occupancy/rssi/"):
+            rssi = payload.get("rssi", -90)
+            sim.inject_real_data(1, 5.0, 0, rssi)
+    except Exception as e:
+        print(f"MQTT Error: {e}")
+
+mqtt_client.on_message = on_mqtt_message
+
+def start_mqtt_background():
+    try:
+        mqtt_client.connect("broker.emqx.io", 1883, 60)
+        mqtt_client.subscribe([("energy/tiles/+/telemetry", 0), ("occupancy/rssi/+/telemetry", 0)])
+        mqtt_client.loop_start()
+        print("MQTT Client Connected to EMQX. Real hardware linked to Sci-Fi Dashboard.")
+    except Exception as e:
+        print(f"MQTT Connection Failed: {e}")
+
+
+# ============================================================
 # تشغيل المحاكاة في خيط منفصل (Background Thread)
 # ============================================================
 def _simulation_loop():
@@ -47,6 +81,14 @@ def _simulation_loop():
     while True:
         sim.tick()
         
+        # ربط حالة اللمبة في المحاكي بالهاردوير
+        led_state = sim.state.loads.get("corridor_led", {}).get("state", "OFF")
+        cmd = "ON" if "ON" in led_state else "OFF"
+        if int(time.time()) % 2 == 0:
+            try:
+                mqtt_client.publish("actuators/relay/corridor_light/cmd", cmd)
+            except: pass
+
         # فحص الإنذارات وإرسال إيميل لو فيه عطل
         if EMAIL_ENABLED:
             snapshot = sim.snapshot()
@@ -86,6 +128,7 @@ def _send_alert_email(alerts: list):
 
 @app.on_event("startup")
 def start_background_simulation():
+    start_mqtt_background()
     thread = threading.Thread(target=_simulation_loop, daemon=True)
     thread.start()
 

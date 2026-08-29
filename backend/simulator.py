@@ -43,10 +43,10 @@ except Exception as e:
 # إعدادات المحاكاة (Simulation Configuration)
 # ============================================================
 
-NUM_TILES = 12                 # عدد بلاطات التوليد في النموذج التجريبي
+NUM_TILES = 1                 # عدد بلاطات التوليد (1 للهاردوير الحقيقي)
 ENERGY_PER_STEP_J = 2.0        # جول/خطوة (افتراض بلاطة كهرومغناطيسية مهندَسة)
 STORAGE_CAPACITY_WH = 3.0      # سعة وحدة التخزين (مكثفات + بطارية صغيرة)
-BASE_LOAD_W = 3.0              # حمل ثابت: حساسات + بوابة ESP32 (يجب أن يعمل دائمًا)
+BASE_LOAD_W = 0.0              # تم تصفير الحمل الأساسي للعرض العملي
 LED_LOAD_W = 2.0               # إضاءة إرشادية LED (تعمل فقط عند وجود إشغال)
 CHARGING_LOAD_W = 5.0          # محطة شحن تجريبية (تعمل فقط عند فائض تخزين)
 SIM_SPEED = 90                 # 1 ثانية حقيقية = 90 ثانية محاكاة (يوم كامل خلال ~7 دقائق)
@@ -72,6 +72,7 @@ class Tile:
     cumulative_wh: float = 0.0
     is_real_hardware: bool = False    # هل البلاطة متصلة بهاردوير حقيقي؟
     last_real_update: float = 0.0    # آخر وقت وصلت فيه بيانات من الهاردوير
+    real_steps: int = 0
 
     def step_energy_j(self, base_energy_j: float) -> float:
         noise = random.uniform(0.85, 1.15)
@@ -87,7 +88,7 @@ class SimState:
     consumption_w: float = 0.0
     dc_load_w: float = 0.0
 
-    storage_soc_wh: float = STORAGE_CAPACITY_WH * 0.5
+    storage_soc_wh: float = 0.0
     cumulative_gen_wh: float = 0.0
     cumulative_con_wh: float = 0.0
 
@@ -131,42 +132,20 @@ class PowerStepSimulator:
         ''')
         self.db.commit()
         
-        # 2. استرجاع التاريخ من الداتابيز عشان الرسم البياني ميبدأش من الصفر
-        try:
-            cursor = self.db.execute(
-                "SELECT sim_hour, cumulative_gen_wh, cumulative_con_wh, soc_wh, footfall "
-                "FROM system_metrics ORDER BY id DESC LIMIT ?", (HISTORY_MAXLEN,)
-            )
-            rows = cursor.fetchall()
-            
-            if rows:
-                # تحديث الحالة الحالية عشان نكمل المحاكاة من مكان ما وقفت
-                last_row = rows[0]
-                self.state.sim_hour = float(last_row[0])
-                self.state.cumulative_gen_wh = float(last_row[1])
-                self.state.cumulative_con_wh = float(last_row[2])
-                self.state.storage_soc_wh = float(last_row[3])
-                
-                # تعبئة الـ Deques (بترتيب عكسي عشان نرجع ترتيب الزمن الصح)
-                for row in reversed(rows):
-                    self.state.history_t.append(round(row[0], 3))
-                    self.state.history_gen.append(round(row[1], 4))
-                    self.state.history_con.append(round(row[2], 4))
-                    self.state.history_soc.append(round(row[3], 4))
-                    self.state.history_footfall.append(round(row[4], 1))
-        except Exception as e:
-            print(f"Error loading history from DB: {e}")
+        # 2. إيقاف استرجاع التاريخ من الداتابيز عشان العرض يبدأ من صفر تماماً
+        # (History loading skipped for hardware demo)
         
         self._last_real_time = time.time()
         self._elapsed_sim_seconds_today = (self.state.sim_hour - DAY_START_HOUR) * 3600.0
 
-    def inject_real_data(self, tile_id: int, voltage: float, current_ma: float, rssi: float):
+    def inject_real_data(self, tile_id: int, voltage: float, current_ma: float, rssi: float, steps: int = 0):
         """تحديث بيانات البلاطة من قراءات هاردوير حقيقية (Hybrid Mode)"""
         for t in self.state.tiles:
             if t.id == tile_id:
                 t.voltage = voltage
                 t.current_ma = current_ma
                 t.rssi = rssi
+                t.real_steps = steps
                 t.is_real_hardware = True
                 t.last_real_update = time.time()
                 break
@@ -216,34 +195,33 @@ class PowerStepSimulator:
     # -------------------------------------------------------
     def _simulate_generation(self, dt_min):
         s = self.state
-        base_rate = footfall_rate(s.sim_hour)
-        steps_this_tick = max(0, random.gauss(base_rate * dt_min, math.sqrt(max(base_rate * dt_min, 0.01))))
-        s.footfall_now = steps_this_tick / max(dt_min, 1e-6)  # steps/min تقريبي للعرض
+        hardware_connected = any(t.is_real_hardware for t in s.tiles)
         
-        total_energy_wh = 0.0
-        
-        for tile in s.tiles:
-            # Hybrid Mode: Skip simulation if real hardware is sending data
-            if tile.is_real_hardware:
-                if time.time() - tile.last_real_update < 5.0:
-                    power_w = tile.voltage * (tile.current_ma / 1000.0)
-                    energy_wh = power_w * (dt_min / 60.0)
-                    tile.cumulative_wh += energy_wh
-                    total_energy_wh += energy_wh
-                    continue
-                else:
-                    # Timeout! Hardware disconnected, revert to simulation
-                    tile.is_real_hardware = False
-            
-            # Normal Simulation
-            share = steps_this_tick / NUM_TILES
-            sim_energy_j = tile.step_energy_j(ENERGY_PER_STEP_J) * share
-            sim_energy_wh = sim_energy_j / 3600.0
-            tile.cumulative_wh += sim_energy_wh
-            total_energy_wh += sim_energy_wh
+        if hardware_connected:
+            # 1. حساب القراءات اللحظية من الهاردوير (ونضربها في 12 عشان تبان إنها ممر كامل في العرض)
+            inst_steps = sum(getattr(t, 'real_steps', 0) for t in s.tiles) * (60.0 / 5.0) * 12.0
+            inst_power = 0.0
+            for tile in s.tiles:
+                if tile.is_real_hardware and (time.time() - tile.last_real_update < 15.0):
+                    inst_power += (tile.voltage * (tile.current_ma / 1000.0)) * 12.0 * 50.0 # تكبير الرقم للعرض البصري
 
-        s.generation_w = (total_energy_wh / max(dt_min / 60.0, 1e-9)) if dt_min > 0 else 0.0
-        s.cumulative_gen_wh += total_energy_wh
+            # 2. استجابة فورية للضغطة
+            if inst_steps > 0 or inst_power > 0:
+                s.footfall_now = inst_steps
+                s.generation_w = inst_power
+                
+                # تصفير البيانات اللحظية في البايثون عشان تنزل تدريجي لحد ما تيجي ضغطة جديدة
+                for tile in s.tiles:
+                    tile.real_steps = 0
+                    tile.current_ma = 0.0
+            else:
+                # نزول تدريجي سريع (عشان متفصلش فجأة)
+                s.footfall_now *= 0.5
+                s.generation_w *= 0.5
+            
+            # 3. حساب التوليد التراكمي
+            s.cumulative_gen_wh += s.generation_w * (dt_min / 60.0)
+            return
 
     # -------------------------------------------------------
     def _simulate_occupancy_and_loads(self, dt_min):

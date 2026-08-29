@@ -5,8 +5,8 @@
 // ==========================================
 // 1. إعدادات الشبكة (غيّرها لبيانات الراوتر بتاعك)
 // ==========================================
-const char* ssid = "YOUR_WIFI_SSID";
-const char* password = "YOUR_WIFI_PASSWORD";
+const char* ssid = "S24 Ultra saif";
+const char* password = "12345678s";
 
 // ==========================================
 // 2. إعدادات سيرفر MQTT
@@ -66,9 +66,20 @@ void callback(char* topic, byte* payload, unsigned int length) {
   if (String(topic) == "alerts/system") {
     digitalWrite(LED_PIN, HIGH);
     digitalWrite(BUZZER_PIN, HIGH);
-    delay(3000); // شغل الإنذار لمدة 3 ثواني
+    delay(3000);
     digitalWrite(LED_PIN, LOW);
     digitalWrite(BUZZER_PIN, LOW);
+  }
+  
+  // تشغيل اللمبة الذكية مع خطوات الرجل
+  if (String(topic) == "actuators/relay/corridor_light/cmd") {
+    if (message == "ON") {
+      digitalWrite(LED_PIN, HIGH);
+      digitalWrite(BUZZER_PIN, HIGH); // هنعتبر البن 4 هو اللمبة الإضافية
+    } else {
+      digitalWrite(LED_PIN, LOW);
+      digitalWrite(BUZZER_PIN, LOW);
+    }
   }
 }
 
@@ -77,8 +88,9 @@ void reconnect() {
     Serial.print("Attempting MQTT connection...");
     if (client.connect(mqtt_client_id)) {
       Serial.println("connected");
-      // الاشتراك في الإنذارات عشان نسمع البايثون
+      // الاشتراك في الإنذارات وأوامر اللمبة
       client.subscribe("alerts/system"); 
+      client.subscribe("actuators/relay/corridor_light/cmd"); 
     } else {
       Serial.print("failed, rc=");
       Serial.print(client.state());
@@ -103,6 +115,44 @@ void setup() {
 }
 
 // ==========================================
+// دالة إرسال البيانات للسيرفر
+// ==========================================
+void sendTelemetry() {
+  // --- 1. إرسال بيانات الطاقة ---
+  StaticJsonDocument<256> docEnergy;
+  docEnergy["tile_id"] = tile_id;
+  docEnergy["steps"] = step_count;
+  docEnergy["power_mw"] = accumulated_power_mw;
+  docEnergy["energy_wh_delta"] = accumulated_energy_wh;
+  docEnergy["ts"] = "ESP32_Time"; 
+
+  char jsonBufferEnergy[256];
+  serializeJson(docEnergy, jsonBufferEnergy);
+  String topicEnergy = String("energy/tiles/") + tile_id + "/telemetry";
+  client.publish(topicEnergy.c_str(), jsonBufferEnergy);
+  Serial.println("⚡ Energy Sent: " + String(jsonBufferEnergy));
+
+  // --- 2. قياس وإرسال إشارة الواي فاي (RSSI) للزحمة ---
+  long rssi = WiFi.RSSI();
+  StaticJsonDocument<256> docRssi;
+  docRssi["node_id"] = node_id;
+  docRssi["rssi"] = rssi;
+  docRssi["ts"] = "ESP32_Time";
+
+  char jsonBufferRssi[256];
+  serializeJson(docRssi, jsonBufferRssi);
+  String topicRssi = String("occupancy/rssi/") + node_id + "/telemetry";
+  client.publish(topicRssi.c_str(), jsonBufferRssi);
+  Serial.println("📡 RSSI Sent: " + String(jsonBufferRssi));
+  Serial.println("-----------------------------------------");
+
+  // تصفير عدادات الطاقة للدورة الجاية
+  step_count = 0;
+  accumulated_power_mw = 0;
+  accumulated_energy_wh = 0;
+}
+
+// ==========================================
 // حلقة التكرار المستمرة (Loop)
 // ==========================================
 void loop() {
@@ -123,47 +173,20 @@ void loop() {
     accumulated_energy_wh += 0.0001;
     
     Serial.println("👣 Step Detected!");
+    
+    // إرسال البيانات فوراً للداشبورد بدون انتظار
+    sendTelemetry();
+    lastSendTime = millis(); // تصفير العداد الزمني عشان ميبعتش تاني إلا بعد 5 ثواني أو ضغطة جديدة
+    
     delay(300); // تأخير بسيط لمنع قراءة نفس الدوسة مرتين
   }
 
   // ==========================================
-  // المهمة الثانية: إرسال كل البيانات (طاقة + إشارة) كل 5 ثواني
+  // المهمة الثانية: إرسال كل البيانات (طاقة + إشارة) كل 5 ثواني لو مفيش حد داس
   // ==========================================
   unsigned long now = millis();
   if (now - lastSendTime > 5000) {
+    sendTelemetry();
     lastSendTime = now;
-
-    // --- 1. إرسال بيانات الطاقة ---
-    StaticJsonDocument<256> docEnergy;
-    docEnergy["tile_id"] = tile_id;
-    docEnergy["steps"] = step_count;
-    docEnergy["power_mw"] = accumulated_power_mw;
-    docEnergy["energy_wh_delta"] = accumulated_energy_wh;
-    docEnergy["ts"] = "ESP32_Time"; 
-
-    char jsonBufferEnergy[256];
-    serializeJson(docEnergy, jsonBufferEnergy);
-    String topicEnergy = String("energy/tiles/") + tile_id + "/telemetry";
-    client.publish(topicEnergy.c_str(), jsonBufferEnergy);
-    Serial.println("⚡ Energy Sent: " + String(jsonBufferEnergy));
-
-    // --- 2. قياس وإرسال إشارة الواي فاي (RSSI) للزحمة ---
-    long rssi = WiFi.RSSI();
-    StaticJsonDocument<256> docRssi;
-    docRssi["node_id"] = node_id;
-    docRssi["rssi"] = rssi;
-    docRssi["ts"] = "ESP32_Time";
-
-    char jsonBufferRssi[256];
-    serializeJson(docRssi, jsonBufferRssi);
-    String topicRssi = String("occupancy/rssi/") + node_id + "/telemetry";
-    client.publish(topicRssi.c_str(), jsonBufferRssi);
-    Serial.println("📡 RSSI Sent: " + String(jsonBufferRssi));
-    Serial.println("-----------------------------------------");
-
-    // تصفير عدادات الطاقة للدورة الجاية
-    step_count = 0;
-    accumulated_power_mw = 0;
-    accumulated_energy_wh = 0;
   }
 }
