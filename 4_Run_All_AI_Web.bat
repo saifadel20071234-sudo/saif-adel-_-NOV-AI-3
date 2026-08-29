@@ -24,4 +24,4 @@ start /B python wait_and_open.py
 
 :: Start Backend Server
 cd backend
-python -m uvicorn app:app --host 127.0.0.1 --port 8000
+python -m uvicorn app:app --host 0.0.0.0 --port 8000

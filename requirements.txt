@@ -1,9 +1,13 @@
-fastapi
-uvicorn
+paho-mqtt
+tensorflow
+streamlit
+streamlit-autorefresh
+plotly
 pandas
 numpy
 scipy
 scikit-learn
-tensorflow
 joblib
 pyarrow
+fastapi
+uvicorn

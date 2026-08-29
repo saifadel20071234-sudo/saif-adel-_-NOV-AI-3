@@ -70,6 +70,8 @@ class Tile:
     id: int
     efficiency: float = 1.0          # 1.0 = كفاءة كاملة
     cumulative_wh: float = 0.0
+    is_real_hardware: bool = False    # هل البلاطة متصلة بهاردوير حقيقي؟
+    last_real_update: float = 0.0    # آخر وقت وصلت فيه بيانات من الهاردوير
 
     def step_energy_j(self, base_energy_j: float) -> float:
         noise = random.uniform(0.85, 1.15)
