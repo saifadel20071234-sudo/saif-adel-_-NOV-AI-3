@@ -180,7 +180,7 @@
 
   /* Heatmap Tiles Grid */
   .tiles-grid{ 
-    display:grid; grid-template-columns:repeat(4,1fr); gap:12px; 
+    display:grid; grid-template-columns:repeat(8,1fr); gap:12px; 
     padding: 15px; background: rgba(0,0,0,0.4); 
     border-radius: 12px; border: 1px solid var(--line);
     box-shadow: inset 0 0 20px rgba(0,0,0,0.5);
@@ -367,10 +367,8 @@ function loadBadgeClass(state){
   return 'off';
 }
 
-async function refreshLive(){
+function updateLive(d) {
   try{
-    const r = await fetch(API + "/api/live");
-    const d = await r.json();
 
     document.getElementById('dayNum').textContent = d.day;
     document.getElementById('simTime').textContent = d.sim_time;
@@ -536,10 +534,25 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 });
 
+function initWebSocket() {
+  const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+  const wsUrl = protocol + '//' + window.location.host + '/ws/live';
+  const ws = new WebSocket(wsUrl);
+  
+  ws.onmessage = (event) => {
+    const data = JSON.parse(event.data);
+    updateLive(data);
+  };
+  
+  ws.onclose = () => {
+    console.log("WebSocket disconnected. Retrying in 2 seconds...");
+    setTimeout(initWebSocket, 2000);
+  };
+}
+
 initChart();
-refreshLive();
+initWebSocket();
 refreshHistory();
-setInterval(refreshLive, 1000);
 setInterval(refreshHistory, 4000);
 </script>
 

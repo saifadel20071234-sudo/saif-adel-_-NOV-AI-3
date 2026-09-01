@@ -43,7 +43,7 @@ except Exception as e:
 # إعدادات المحاكاة (Simulation Configuration)
 # ============================================================
 
-NUM_TILES = 1                 # عدد بلاطات التوليد (1 للهاردوير الحقيقي)
+NUM_TILES = 16                # عدد بلاطات التوليد (16 لمحاكاة ممر كامل)
 ENERGY_PER_STEP_J = 2.0        # جول/خطوة (افتراض بلاطة كهرومغناطيسية مهندَسة)
 STORAGE_CAPACITY_WH = 3.0      # سعة وحدة التخزين (مكثفات + بطارية صغيرة)
 BASE_LOAD_W = 0.0              # تم تصفير الحمل الأساسي للعرض العملي
@@ -73,6 +73,7 @@ class Tile:
     is_real_hardware: bool = False    # هل البلاطة متصلة بهاردوير حقيقي؟
     last_real_update: float = 0.0    # آخر وقت وصلت فيه بيانات من الهاردوير
     real_steps: int = 0
+    is_stepped: bool = False          # هل هناك قدم تقف عليها حالياً؟
 
     def step_energy_j(self, base_energy_j: float) -> float:
         noise = random.uniform(0.85, 1.15)
@@ -99,6 +100,7 @@ class SimState:
     tiles: list = field(default_factory=lambda: [Tile(i) for i in range(1, NUM_TILES + 1)])
     loads: dict = field(default_factory=dict)
     alerts: list = field(default_factory=list)
+    active_walkers: list = field(default_factory=list)
 
     history_t: deque = field(default_factory=lambda: deque(maxlen=HISTORY_MAXLEN))
     history_gen: deque = field(default_factory=lambda: deque(maxlen=HISTORY_MAXLEN))
@@ -222,6 +224,44 @@ class PowerStepSimulator:
             # 3. حساب التوليد التراكمي
             s.cumulative_gen_wh += s.generation_w * (dt_min / 60.0)
             return
+            
+        # ==========================================
+        # محاكاة برمجية كاملة (Virtual Walkers)
+        # ==========================================
+        real_dt = 1.0  # ثانية واحدة تقريباً لكل استدعاء
+        
+        # 1. إطفاء كل البلاط
+        for t in s.tiles:
+            t.is_stepped = False
+            
+        # 2. توليد أشخاص جدد بناءً على معدل الحركة الحالي
+        rate_per_min = footfall_rate(s.sim_hour)
+        prob_per_tick = (rate_per_min / 60.0) * (dt_min * 60.0) 
+        
+        if random.random() < prob_per_tick:
+            # إضافة شخص جديد في البداية بسرعة عشوائية (بلاطات في الثانية)
+            s.active_walkers.append({"pos": 0.0, "speed": random.uniform(1.5, 3.5)})
+            
+        inst_power = 0.0
+        
+        # 3. تحريك الأشخاص وحساب الطاقة
+        for w in s.active_walkers[:]:
+            current_tile = int(w["pos"])
+            w["pos"] += w["speed"] * real_dt
+            
+            if current_tile < NUM_TILES:
+                t = s.tiles[current_tile]
+                t.is_stepped = True
+                energy_j = t.step_energy_j(ENERGY_PER_STEP_J)
+                inst_power += energy_j / real_dt
+            
+            if w["pos"] >= NUM_TILES:
+                s.active_walkers.remove(w)
+                
+        # 4. تحديث المتغيرات العامة
+        s.footfall_now = len(s.active_walkers) * 12.0
+        s.generation_w = inst_power
+        s.cumulative_gen_wh += s.generation_w * (dt_min / 60.0)
 
     # -------------------------------------------------------
     def _simulate_occupancy_and_loads(self, dt_min):
@@ -367,7 +407,7 @@ class PowerStepSimulator:
             "alerts": s.alerts,
             "tiles": [{"id": t.id, "efficiency_pct": round(t.efficiency * 100, 1),
                        "cumulative_wh": round(t.cumulative_wh, 4),
-                       "stepped_on": random.random() < min(s.footfall_now / 30.0, 0.4)} for t in s.tiles],
+                       "stepped_on": t.is_stepped} for t in s.tiles],
         }
 
     def history(self) -> dict:

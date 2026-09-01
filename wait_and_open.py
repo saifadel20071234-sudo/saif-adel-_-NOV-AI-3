@@ -1,4 +1,5 @@
 import urllib.request
+import urllib.error
 import time
 import webbrowser
 import sys
@@ -11,6 +12,11 @@ for _ in range(60):
         urllib.request.urlopen(url)
         webbrowser.open(url)
         sys.exit(0)
+    except urllib.error.HTTPError as e:
+        if e.code == 401: # 401 means server is up but requires auth (which is expected)
+            webbrowser.open(url)
+            sys.exit(0)
+        time.sleep(1)
     except Exception:
         time.sleep(1)
 

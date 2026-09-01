@@ -8,10 +8,10 @@ import smtplib
 from email.mime.text import MIMEText
 from datetime import datetime
 
-from fastapi import FastAPI
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Request, Header, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse, StreamingResponse
+from fastapi.responses import FileResponse, StreamingResponse, Response
 import paho.mqtt.client as mqtt
 import json
 
@@ -25,6 +25,32 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+@app.middleware("http")
+async def basic_auth_middleware(request: Request, call_next):
+    # مسارات لا تتطلب حماية Basic Auth (مثل نقطة اتصال الهاردوير)
+    if request.url.path.startswith("/api/ingest") or request.url.path.startswith("/docs") or request.url.path.startswith("/openapi.json"):
+        return await call_next(request)
+    
+    # التحقق من بيانات الدخول
+    auth_header = request.headers.get("Authorization")
+    if auth_header:
+        scheme, _, credentials = auth_header.partition(" ")
+        if scheme.lower() == "basic":
+            import base64
+            try:
+                decoded = base64.b64decode(credentials).decode("utf-8")
+                username, _, password = decoded.partition(":")
+                if username == "admin" and password == "powerstep2026":
+                    return await call_next(request)
+            except:
+                pass
+
+    return Response(
+        status_code=401,
+        headers={"WWW-Authenticate": "Basic realm=\"Secure Area\""},
+        content="Unauthorized"
+    )
 
 sim = PowerStepSimulator()
 
@@ -143,6 +169,19 @@ def get_live():
     return sim.snapshot()
 
 
+@app.websocket("/ws/live")
+async def websocket_live_endpoint(websocket: WebSocket):
+    """نقطة اتصال WebSocket لدفع البيانات اللحظية للواجهة بشكل دائم."""
+    await websocket.accept()
+    try:
+        while True:
+            data = sim.snapshot()
+            await websocket.send_json(data)
+            await asyncio.sleep(1.0)
+    except WebSocketDisconnect:
+        print("Client disconnected from WebSocket")
+
+
 @app.get("/api/history")
 def get_history():
     """بيانات تراكمية لرسم الرسم البياني (توليد مقابل استهلاك على مدار اليوم)."""
@@ -150,10 +189,13 @@ def get_history():
 
 
 @app.post("/api/ingest")
-def ingest_real_reading(payload: dict):
+def ingest_real_reading(payload: dict, x_api_key: str = Header(None)):
     """
     استقبال قراءات حقيقية من ESP32 فعلي وتوجيهها للمحاكي الهجين.
     """
+    if x_api_key != "ESP32_SECRET_KEY_123":
+        raise HTTPException(status_code=401, detail="Invalid API Key")
+        
     tile_id = payload.get("tile_id")
     if tile_id is not None:
         voltage = payload.get("voltage", 0.0)

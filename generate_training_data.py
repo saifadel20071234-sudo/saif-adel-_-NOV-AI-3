@@ -70,12 +70,15 @@ INTERVAL_SEC = 5  # فترة القراءة بالثواني
 
 print(f"جاري توليد بيانات {DAYS} أيام بفترة {INTERVAL_SEC} ثواني...")
 
-start_time = datetime.utcnow() - timedelta(days=DAYS)
-current   = start_time
+# التعديل: تثبيت تاريخ البداية عشان يتطابق مع التواريخ الثابتة في ملف labels.csv 
+# (عشان الداتا تتدمج صح وميطلعش Error في التدريب)
+start_time = datetime.fromisoformat("2026-08-23T17:35:36")
+end_time = start_time + timedelta(days=DAYS)
+current = start_time
 energy_rows = []
 rssi_rows   = []
 
-while current <= datetime.utcnow():
+while current <= end_time:
     hour      = current.hour + current.minute / 60
     intensity = busy_factor(hour)
     ts_str    = current.isoformat()
