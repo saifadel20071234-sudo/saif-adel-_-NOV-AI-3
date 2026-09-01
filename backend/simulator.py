@@ -16,6 +16,10 @@ import random
 import time
 from collections import deque
 from dataclasses import dataclass, field
+import warnings
+
+# إخفاء تحذيرات الـ AI الخاصة بأسماء الأعمدة (Feature names) للحفاظ على نظافة موجه الأوامر
+warnings.filterwarnings("ignore", category=UserWarning)
 
 import os
 import sqlite3
@@ -24,6 +28,8 @@ import joblib
 import numpy as np
 os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
 import tensorflow as tf
+
+DEMO_MODE = os.getenv("DEMO_MODE") == "1"
 
 # Load AI Models
 try:
@@ -197,80 +203,91 @@ class PowerStepSimulator:
     # -------------------------------------------------------
     def _simulate_generation(self, dt_min):
         s = self.state
+        
+        # 1. إطفاء كل البلاط كبداية
+        for t in s.tiles:
+            t.is_stepped = False
+
         hardware_connected = any(t.is_real_hardware for t in s.tiles)
         
         if hardware_connected:
-            # 1. حساب القراءات اللحظية من الهاردوير (ونضربها في 12 عشان تبان إنها ممر كامل في العرض)
-            inst_steps = sum(getattr(t, 'real_steps', 0) for t in s.tiles) * (60.0 / 5.0) * 12.0
+            # الاعتماد فقط على بيانات الهاردوير الحقيقية (Real Hardware Data Only)
+            inst_steps = sum(getattr(t, 'real_steps', 0) for t in s.tiles) * (60.0 / 5.0)
             inst_power = 0.0
+            
             for tile in s.tiles:
                 if tile.is_real_hardware and (time.time() - tile.last_real_update < 15.0):
-                    inst_power += (tile.voltage * (tile.current_ma / 1000.0)) * 12.0 * 50.0 # تكبير الرقم للعرض البصري
+                    # الطاقة الحقيقية بدون أي تكبير عشوائي
+                    inst_power += (getattr(tile, 'voltage', 0.0) * (getattr(tile, 'current_ma', 0.0) / 1000.0))
+                    
+                    if getattr(tile, 'real_steps', 0) > 0:
+                        tile.is_stepped = True
 
-            # 2. استجابة فورية للضغطة
             if inst_steps > 0 or inst_power > 0:
                 s.footfall_now = inst_steps
                 s.generation_w = inst_power
                 
-                # تصفير البيانات اللحظية في البايثون عشان تنزل تدريجي لحد ما تيجي ضغطة جديدة
+                # تصفير البيانات اللحظية بعد قراءتها
                 for tile in s.tiles:
                     tile.real_steps = 0
                     tile.current_ma = 0.0
             else:
-                # نزول تدريجي سريع (عشان متفصلش فجأة)
+                # هبوط سريع لتصفير القراءات
                 s.footfall_now *= 0.5
                 s.generation_w *= 0.5
+        elif DEMO_MODE:
+            # ==========================================
+            # محاكاة برمجية كاملة (Virtual Walkers) في الديمو
+            # ==========================================
+            real_dt = 1.0
             
-            # 3. حساب التوليد التراكمي
-            s.cumulative_gen_wh += s.generation_w * (dt_min / 60.0)
-            return
+            rate_per_min = footfall_rate(s.sim_hour)
+            prob_per_tick = (rate_per_min / 60.0) * (dt_min * 60.0) 
             
-        # ==========================================
-        # محاكاة برمجية كاملة (Virtual Walkers)
-        # ==========================================
-        real_dt = 1.0  # ثانية واحدة تقريباً لكل استدعاء
-        
-        # 1. إطفاء كل البلاط
-        for t in s.tiles:
-            t.is_stepped = False
-            
-        # 2. توليد أشخاص جدد بناءً على معدل الحركة الحالي
-        rate_per_min = footfall_rate(s.sim_hour)
-        prob_per_tick = (rate_per_min / 60.0) * (dt_min * 60.0) 
-        
-        if random.random() < prob_per_tick:
-            # إضافة شخص جديد في البداية بسرعة عشوائية (بلاطات في الثانية)
-            s.active_walkers.append({"pos": 0.0, "speed": random.uniform(1.5, 3.5)})
-            
-        inst_power = 0.0
-        
-        # 3. تحريك الأشخاص وحساب الطاقة
-        for w in s.active_walkers[:]:
-            current_tile = int(w["pos"])
-            w["pos"] += w["speed"] * real_dt
-            
-            if current_tile < NUM_TILES:
-                t = s.tiles[current_tile]
-                t.is_stepped = True
-                energy_j = t.step_energy_j(ENERGY_PER_STEP_J)
-                inst_power += energy_j / real_dt
-            
-            if w["pos"] >= NUM_TILES:
-                s.active_walkers.remove(w)
+            if random.random() < prob_per_tick:
+                s.active_walkers.append({"pos": 0.0, "speed": random.uniform(1.5, 3.5)})
                 
-        # 4. تحديث المتغيرات العامة
-        s.footfall_now = len(s.active_walkers) * 12.0
-        s.generation_w = inst_power
+            inst_power = 0.0
+            for w in s.active_walkers[:]:
+                current_tile = int(w["pos"])
+                w["pos"] += w["speed"] * real_dt
+                
+                if current_tile < NUM_TILES:
+                    t = s.tiles[current_tile]
+                    t.is_stepped = True
+                    energy_j = t.step_energy_j(ENERGY_PER_STEP_J)
+                    inst_power += energy_j / real_dt
+                
+                if w["pos"] >= NUM_TILES:
+                    s.active_walkers.remove(w)
+                    
+            s.footfall_now = len(s.active_walkers) * 12.0
+            s.generation_w = inst_power
+        else:
+            # في حالة عدم وجود هاردوير وعدم تفعيل الديمو، القراءات كلها صفر
+            s.footfall_now = 0.0
+            s.generation_w = 0.0
+            
         s.cumulative_gen_wh += s.generation_w * (dt_min / 60.0)
 
     # -------------------------------------------------------
     def _simulate_occupancy_and_loads(self, dt_min):
         s = self.state
         
-        # محاكاة إشارة الواي فاي (RSSI) وتمريرها لموديل الذكاء الاصطناعي
-        base_rssi = -70
-        rssi_noise = s.footfall_now * 2.0
-        rssi_vals = [base_rssi + random.uniform(-rssi_noise, rssi_noise) for _ in range(5)]
+        # سحب قراءات إشارة الواي فاي (RSSI) الحقيقية من الهاردوير إن وجدت
+        real_rssi_vals = [getattr(t, 'rssi', -90.0) for t in s.tiles if getattr(t, 'is_real_hardware', False)]
+        if not real_rssi_vals:
+            if DEMO_MODE:
+                base_rssi = -70
+                rssi_noise = s.footfall_now * 2.0
+                real_rssi_vals = [base_rssi + random.uniform(-rssi_noise, rssi_noise) for _ in range(5)]
+            else:
+                real_rssi_vals = [-90.0] * 5
+            
+        rssi_vals = real_rssi_vals
+        while len(rssi_vals) < 5:
+            rssi_vals.append(rssi_vals[-1])
+        rssi_vals = rssi_vals[:5]
         
         if AI_AVAILABLE:
             arr = np.array(rssi_vals)

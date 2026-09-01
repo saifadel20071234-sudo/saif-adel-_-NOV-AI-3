@@ -26,32 +26,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-@app.middleware("http")
-async def basic_auth_middleware(request: Request, call_next):
-    # مسارات لا تتطلب حماية Basic Auth (مثل نقطة اتصال الهاردوير)
-    if request.url.path.startswith("/api/ingest") or request.url.path.startswith("/docs") or request.url.path.startswith("/openapi.json"):
-        return await call_next(request)
-    
-    # التحقق من بيانات الدخول
-    auth_header = request.headers.get("Authorization")
-    if auth_header:
-        scheme, _, credentials = auth_header.partition(" ")
-        if scheme.lower() == "basic":
-            import base64
-            try:
-                decoded = base64.b64decode(credentials).decode("utf-8")
-                username, _, password = decoded.partition(":")
-                if username == "admin" and password == "powerstep2026":
-                    return await call_next(request)
-            except:
-                pass
-
-    return Response(
-        status_code=401,
-        headers={"WWW-Authenticate": "Basic realm=\"Secure Area\""},
-        content="Unauthorized"
-    )
-
 sim = PowerStepSimulator()
 
 # إعدادات الإيميل (اختياري — غيّرها لإعداداتك الحقيقية لتفعيل الإشعارات)
@@ -189,13 +163,10 @@ def get_history():
 
 
 @app.post("/api/ingest")
-def ingest_real_reading(payload: dict, x_api_key: str = Header(None)):
+def ingest_real_reading(payload: dict):
     """
     استقبال قراءات حقيقية من ESP32 فعلي وتوجيهها للمحاكي الهجين.
     """
-    if x_api_key != "ESP32_SECRET_KEY_123":
-        raise HTTPException(status_code=401, detail="Invalid API Key")
-        
     tile_id = payload.get("tile_id")
     if tile_id is not None:
         voltage = payload.get("voltage", 0.0)
