@@ -231,6 +231,36 @@
   }
 
   footer{ text-align:center; color:var(--muted); font-size:.75rem; padding:20px 0 30px; letter-spacing: 0.5px; }
+
+  /* عداد الطاقة الإجمالية */
+  .energy-counter-banner{
+    background: linear-gradient(135deg, rgba(0,255,204,0.08), rgba(0,191,255,0.08));
+    border: 1px solid rgba(0,255,204,0.25);
+    border-radius: 16px; padding: 18px 28px;
+    display: flex; align-items: center; justify-content: space-between;
+    flex-wrap: wrap; gap: 12px; margin-bottom: 18px;
+    backdrop-filter: blur(14px);
+    box-shadow: 0 0 30px rgba(0,255,204,0.1), inset 0 0 20px rgba(0,255,204,0.03);
+    position: relative; overflow: hidden;
+  }
+  .energy-counter-banner::before{
+    content: ''; position: absolute; inset: 0;
+    background: linear-gradient(90deg, transparent, rgba(0,255,204,0.04), transparent);
+    animation: shimmer 3s infinite;
+  }
+  @keyframes shimmer{ 0%{transform:translateX(-100%);} 100%{transform:translateX(100%);} }
+  .counter-group{ display:flex; align-items:center; gap:20px; flex-wrap:wrap; }
+  .counter-item{ text-align:center; }
+  .counter-val{
+    font-family:'Consolas',monospace; font-size:2rem; font-weight:800;
+    text-shadow: 0 0 20px currentColor;
+    transition: all 0.5s ease;
+  }
+  .counter-val.green{ color: var(--green); }
+  .counter-val.blue{ color: var(--blue); }
+  .counter-val.orange{ color: var(--orange); }
+  .counter-label{ font-size:.7rem; color:var(--muted); text-transform:uppercase; letter-spacing:0.5px; margin-top:2px; }
+  .counter-divider{ width:1px; height:50px; background:var(--line); }
 </style>
 </head>
 <body>
@@ -254,17 +284,42 @@
 <div style="max-width:1300px; margin:10px auto; padding:0 26px; display:flex; gap:10px; flex-wrap:wrap; align-items:center;">
   <div class="nav-links">
     <a href="/" class="active">🏠 لوحة التحكم</a>
-    <a href="/analytics.html">📊 التحليلات التاريخية</a>
+    <a href="/analytics.html">📊 التحليلات</a>
+    <a href="/compare.html">⚡ مقارنة Before/After</a>
     <a href="/about_ai.html">🤖 عن الذكاء الاصطناعي</a>
-    <a href="http://localhost:8000/docs" target="_blank" style="background: rgba(0, 204, 255, 0.2); border-color: #00ccff; color: #00ccff;">💻 توثيق API</a>
+    <a href="http://localhost:8000/docs" target="_blank" style="background: rgba(0, 204, 255, 0.2); border-color: #00ccff; color: #00ccff;">💻 API</a>
   </div>
   <div style="display:flex; gap:8px;">
-    <a class="btn-export" href="http://localhost:8000/api/export/csv" target="_blank">📥 تحميل CSV</a>
-    <button class="btn-export" onclick="window.print()" style="background:linear-gradient(135deg,#6b21a8,#9333ea); border-color:#b026ff; box-shadow:0 0 12px rgba(176,38,255,0.3);">📄 تصدير PDF</button>
+    <a class="btn-export" href="http://localhost:8000/api/export/csv" target="_blank">📥 CSV</a>
+    <button class="btn-export" onclick="window.print()" style="background:linear-gradient(135deg,#6b21a8,#9333ea); border-color:#b026ff; box-shadow:0 0 12px rgba(176,38,255,0.3);">📄 PDF</button>
   </div>
 </div>
 
 <main>
+
+  <!-- عداد الطاقة الإجمالية المُولَّدة -->
+  <div class="energy-counter-banner">
+    <div style="z-index:1;">
+      <div style="font-size:.8rem; color:var(--muted); text-transform:uppercase; letter-spacing:1px; margin-bottom:6px;">⚡ إجمالي ما ولّده النظام منذ بدء التشغيل</div>
+      <div style="font-size:.72rem; color:var(--muted); opacity:.7;">يتحدث كل ثانية — مباشر من نواة المحاكي</div>
+    </div>
+    <div class="counter-group" style="z-index:1;">
+      <div class="counter-item">
+        <div class="counter-val green" id="totalGenWh">0.0000</div>
+        <div class="counter-label">واط·ساعة مُولَّدة (Wh)</div>
+      </div>
+      <div class="counter-divider"></div>
+      <div class="counter-item">
+        <div class="counter-val blue" id="totalConWh">0.0000</div>
+        <div class="counter-label">واط·ساعة مُستهلَكة (Wh)</div>
+      </div>
+      <div class="counter-divider"></div>
+      <div class="counter-item">
+        <div class="counter-val orange" id="totalSavedCO2">0.00</div>
+        <div class="counter-label">جرام CO₂ تم توفيره 🌱</div>
+      </div>
+    </div>
+  </div>
 
   <div class="grid4">
     <div class="card gauge-wrap">
@@ -392,6 +447,13 @@ function updateLive(d) {
     if (d.cumulative_gen_wh !== undefined) {
       const co2Grams = d.cumulative_gen_wh * 0.4;
       document.getElementById('co2SavedVal').textContent = co2Grams.toFixed(2);
+
+      // عداد الطاقة الإجمالية في البانر العلوي
+      document.getElementById('totalGenWh').textContent = d.cumulative_gen_wh.toFixed(4);
+      document.getElementById('totalSavedCO2').textContent = co2Grams.toFixed(2);
+    }
+    if (d.cumulative_con_wh !== undefined) {
+      document.getElementById('totalConWh').textContent = d.cumulative_con_wh.toFixed(4);
     }
     
     setGauge('gaugeCon', d.consumption_w * 10, 'conVal', d.consumption_w.toFixed(1));
