@@ -90,6 +90,12 @@
     box-shadow: 0 0 25px rgba(0,255,204,0.5);
     transform: translateY(-2px);
   }
+  @media print {
+    header, .nav-links, .btn-export, footer { display: none !important; }
+    body { background: white !important; color: black !important; }
+    .card { border: 1px solid #ccc !important; background: white !important; box-shadow: none !important; color: black !important; }
+    canvas { max-width: 100% !important; }
+  }
 
   main{ padding:20px 26px 40px; max-width:1300px; margin:0 auto; }
 
@@ -249,9 +255,13 @@
   <div class="nav-links">
     <a href="/" class="active">🏠 لوحة التحكم</a>
     <a href="/analytics.html">📊 التحليلات التاريخية</a>
-    <a href="http://localhost:8000/docs" target="_blank" style="background: rgba(0, 204, 255, 0.2); border-color: #00ccff; color: #00ccff;">💻 توثيق المبرمجين (API)</a>
+    <a href="/about_ai.html">🤖 عن الذكاء الاصطناعي</a>
+    <a href="http://localhost:8000/docs" target="_blank" style="background: rgba(0, 204, 255, 0.2); border-color: #00ccff; color: #00ccff;">💻 توثيق API</a>
   </div>
-  <a class="btn-export" href="http://localhost:8000/api/export/csv" target="_blank">📥 تحميل تقرير CSV</a>
+  <div style="display:flex; gap:8px;">
+    <a class="btn-export" href="http://localhost:8000/api/export/csv" target="_blank">📥 تحميل CSV</a>
+    <button class="btn-export" onclick="window.print()" style="background:linear-gradient(135deg,#6b21a8,#9333ea); border-color:#b026ff; box-shadow:0 0 12px rgba(176,38,255,0.3);">📄 تصدير PDF</button>
+  </div>
 </div>
 
 <main>

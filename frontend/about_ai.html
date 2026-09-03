@@ -1,0 +1,413 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#0f172a">
+<title>PowerStep Grid — عن الذكاء الاصطناعي</title>
+<script src="vendor/chart.umd.js"></script>
+<style>
+  @font-face{
+    font-family:'Cairo';
+    src:url('vendor/fonts/Cairo-Regular.ttf');
+    font-weight:400 800;
+  }
+  :root{
+    --green: #00ffcc;
+    --green-dark: #004d40;
+    --blue: #00bfff;
+    --purple: #b026ff;
+    --orange: #ffaa00;
+    --danger: #ff2a2a;
+    --bg: #090e17;
+    --card: rgba(16, 24, 39, 0.65);
+    --ink: #e2e8f0;
+    --muted: #94a3b8;
+    --line: rgba(255, 255, 255, 0.12);
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0; background:var(--bg); color:var(--ink);
+    font-family:'Cairo',sans-serif; direction:rtl;
+    background-image:
+      linear-gradient(rgba(255,255,255,0.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255,255,255,0.03) 1px, transparent 1px);
+    background-size:40px 40px;
+  }
+  header{
+    background:linear-gradient(120deg, rgba(11,16,27,0.8), rgba(0,77,64,0.7));
+    backdrop-filter:blur(12px);
+    border-bottom:1px solid rgba(0,255,204,0.2);
+    color:#fff; padding:18px 26px; display:flex; align-items:center; justify-content:space-between;
+    flex-wrap:wrap; gap:10px;
+    box-shadow:0 4px 30px rgba(0,0,0,0.5);
+  }
+  header .title{ font-size:1.35rem; font-weight:800; color:var(--green); text-shadow:0 0 10px rgba(0,255,204,0.4); }
+  header .subtitle{ font-size:.78rem; opacity:.85; margin-top:2px; }
+  .nav-links{ display:flex; gap:10px; }
+  .nav-links a{
+    color:var(--muted); text-decoration:none; padding:7px 16px;
+    border-radius:20px; font-size:.78rem; font-weight:700;
+    border:1px solid var(--line); transition:all 0.3s ease;
+  }
+  .nav-links a:hover, .nav-links a.active{
+    color:var(--green); border-color:var(--green);
+    box-shadow:0 0 10px rgba(0,255,204,0.3);
+  }
+  .btn-pdf{
+    display:inline-flex; align-items:center; gap:8px;
+    padding:10px 22px; border-radius:12px; font-size:.82rem; font-weight:700;
+    border:none; cursor:pointer; color:#fff;
+    background:linear-gradient(135deg, #6b21a8, #9333ea);
+    border:1px solid var(--purple);
+    box-shadow:0 0 12px rgba(176,38,255,0.3);
+    transition:all 0.3s ease;
+    font-family:'Cairo',sans-serif;
+  }
+  .btn-pdf:hover{ box-shadow:0 0 25px rgba(176,38,255,0.6); transform:translateY(-2px); }
+  .btn-export{
+    display:inline-flex; align-items:center; gap:8px;
+    padding:10px 22px; border-radius:12px; font-size:.82rem; font-weight:700;
+    border:none; cursor:pointer; color:#fff;
+    background:linear-gradient(135deg, var(--green-dark), #00796b);
+    border:1px solid var(--green);
+    box-shadow:0 0 12px rgba(0,255,204,0.2);
+    transition:all 0.3s ease;
+    font-family:'Cairo',sans-serif; text-decoration:none;
+  }
+  .btn-export:hover{ box-shadow:0 0 25px rgba(0,255,204,0.5); transform:translateY(-2px); }
+
+  main{ padding:20px 26px 40px; max-width:1200px; margin:0 auto; }
+
+  .card{
+    background:var(--card);
+    border:1px solid rgba(255,255,255,0.08);
+    border-radius:16px; padding:22px;
+    backdrop-filter:blur(14px);
+    box-shadow:0 8px 32px rgba(0,0,0,0.3);
+    margin-bottom:20px;
+    transition:transform 0.3s ease, border-color 0.3s ease;
+  }
+  .card:hover{ border-color:rgba(255,255,255,0.2); transform:translateY(-2px); }
+  .card h2{ margin:0 0 18px; font-size:1rem; color:var(--green); font-weight:800; text-transform:uppercase; letter-spacing:0.5px; }
+  .card h3{ margin:0 0 12px; font-size:.85rem; color:var(--muted); font-weight:700; text-transform:uppercase; }
+
+  /* Model Card */
+  .model-card{
+    background:rgba(0,0,0,0.3);
+    border:1px solid var(--line);
+    border-radius:14px; padding:20px;
+    margin-bottom:16px;
+    transition:all 0.3s ease;
+    position:relative; overflow:hidden;
+  }
+  .model-card::before{
+    content:''; position:absolute; top:0; right:0;
+    width:4px; height:100%;
+  }
+  .model-card.rf::before{ background:linear-gradient(to bottom, var(--green), var(--green-dark)); }
+  .model-card.lstm::before{ background:linear-gradient(to bottom, var(--blue), #0066aa); }
+  .model-card.ae::before{ background:linear-gradient(to bottom, var(--purple), #660099); }
+  .model-card:hover{ border-color:rgba(255,255,255,0.2); transform:translateX(-4px); }
+
+  .model-header{ display:flex; align-items:center; justify-content:space-between; margin-bottom:14px; flex-wrap:wrap; gap:8px; }
+  .model-name{ font-size:1rem; font-weight:800; color:#fff; }
+  .model-lib{
+    font-size:.72rem; padding:4px 10px; border-radius:20px;
+    background:rgba(255,255,255,0.08); border:1px solid var(--line);
+    color:var(--muted); font-family:'Consolas',monospace;
+  }
+  .status-badge{
+    padding:5px 14px; border-radius:20px; font-size:.72rem; font-weight:700;
+    display:inline-flex; align-items:center; gap:5px;
+  }
+  .status-badge.ready{ background:rgba(0,255,204,0.1); border:1px solid var(--green); color:var(--green); }
+  .status-badge.missing{ background:rgba(255,42,42,0.1); border:1px solid var(--danger); color:var(--danger); }
+
+  .model-grid{ display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+  @media(max-width:700px){ .model-grid{ grid-template-columns:1fr; } }
+
+  .info-row{ margin-bottom:10px; }
+  .info-label{ font-size:.72rem; color:var(--muted); text-transform:uppercase; letter-spacing:0.5px; margin-bottom:3px; }
+  .info-val{ font-size:.85rem; color:var(--ink); font-weight:600; }
+  .info-val.code{ font-family:'Consolas',monospace; color:var(--green); font-size:.8rem; }
+  .info-val.accent{ color:var(--blue); }
+  .features-list{ display:flex; flex-wrap:wrap; gap:6px; margin-top:4px; }
+  .feature-tag{
+    font-size:.7rem; padding:3px 9px; border-radius:10px;
+    background:rgba(0,191,255,0.1); border:1px solid rgba(0,191,255,0.3);
+    color:var(--blue); font-family:'Consolas',monospace;
+  }
+
+  /* Pipeline */
+  .pipeline-steps{ display:flex; gap:0; flex-wrap:wrap; }
+  .step{
+    display:flex; align-items:center; gap:0;
+  }
+  .step-box{
+    background:rgba(0,0,0,0.4); border:1px solid var(--line);
+    border-radius:10px; padding:10px 16px; font-size:.78rem;
+    color:var(--ink); font-family:'Consolas',monospace;
+    transition:all 0.3s; cursor:default;
+  }
+  .step-box:hover{ border-color:var(--green); color:var(--green); }
+  .step-arrow{ color:var(--muted); font-size:1.2rem; padding:0 6px; }
+
+  /* Data Mode Banner */
+  .mode-banner{
+    padding:14px 20px; border-radius:12px; margin-bottom:24px;
+    display:flex; align-items:center; gap:12px; font-size:.9rem; font-weight:700;
+  }
+  .mode-banner.demo{ background:rgba(255,170,0,0.1); border:1px solid var(--orange); color:var(--orange); }
+  .mode-banner.real{ background:rgba(0,255,204,0.1); border:1px solid var(--green); color:var(--green); }
+  .mode-dot{ width:12px; height:12px; border-radius:50%; animation:pulse 1.5s infinite; flex-shrink:0; }
+  .mode-banner.demo .mode-dot{ background:var(--orange); box-shadow:0 0 8px var(--orange); }
+  .mode-banner.real .mode-dot{ background:var(--green); box-shadow:0 0 8px var(--green); }
+
+  @keyframes pulse{ 0%{transform:scale(1);opacity:1;} 50%{transform:scale(1.3);opacity:0.7;} 100%{transform:scale(1);opacity:1;} }
+
+  footer{ text-align:center; color:var(--muted); font-size:.75rem; padding:20px 0 30px; }
+
+  /* Loading */
+  .loading{ text-align:center; padding:60px; color:var(--muted); font-size:.9rem; }
+  .spinner{ display:inline-block; width:30px; height:30px; border:3px solid var(--line); border-top-color:var(--green); border-radius:50%; animation:spin 0.8s linear infinite; margin-bottom:10px; }
+  @keyframes spin{ to{ transform:rotate(360deg); } }
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <div class="title">🤖 PowerStep Grid — الذكاء الاصطناعي</div>
+    <div class="subtitle">نماذج AI المدمجة في النظام — معلومات تفصيلية</div>
+  </div>
+  <div style="font-family:'Consolas',monospace; font-size:1.4rem; color:#00ffcc; text-shadow:0 0 10px rgba(0,255,204,0.5); font-weight:bold;" id="realClock">--:--:--</div>
+</header>
+
+<div style="max-width:1200px; margin:10px auto; padding:0 26px; display:flex; gap:10px; flex-wrap:wrap; align-items:center;">
+  <div class="nav-links">
+    <a href="/">🏠 لوحة التحكم</a>
+    <a href="/analytics.html">📊 التحليلات التاريخية</a>
+    <a href="/about_ai.html" class="active">🤖 عن الذكاء الاصطناعي</a>
+    <a href="http://localhost:8000/docs" target="_blank" style="background:rgba(0,204,255,0.2); border-color:#00ccff; color:#00ccff;">💻 توثيق API</a>
+  </div>
+  <div style="display:flex; gap:8px; margin-right:auto;">
+    <a class="btn-export" href="http://localhost:8000/api/export/csv" target="_blank">📥 تحميل CSV</a>
+    <button class="btn-pdf" onclick="exportPDF()">📄 تصدير PDF</button>
+  </div>
+</div>
+
+<main id="mainContent">
+  <div class="loading">
+    <div class="spinner"></div>
+    <div>جاري تحميل بيانات النماذج...</div>
+  </div>
+</main>
+
+<footer>POWERSTEP GRID © 2026 · AI Models Dashboard · Sci-Fi Edition</footer>
+
+<script>
+const API = window.location.origin;
+
+// ساعة حقيقية
+setInterval(() => {
+  document.getElementById('realClock').textContent = new Date().toLocaleTimeString('en-US', {hour12: false});
+}, 1000);
+
+// صوت hover
+const AudioCtx = window.AudioContext || window.webkitAudioContext;
+const audioCtx = new AudioCtx();
+function playClick() {
+  if (audioCtx.state === 'suspended') audioCtx.resume();
+  const osc = audioCtx.createOscillator();
+  const gain = audioCtx.createGain();
+  osc.connect(gain); gain.connect(audioCtx.destination);
+  osc.frequency.setValueAtTime(600, audioCtx.currentTime);
+  osc.frequency.exponentialRampToValueAtTime(300, audioCtx.currentTime + 0.05);
+  gain.gain.setValueAtTime(0.05, audioCtx.currentTime);
+  gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.05);
+  osc.start(); osc.stop(audioCtx.currentTime + 0.05);
+}
+
+function modelClass(id) {
+  if (id === 'random_forest') return 'rf';
+  if (id === 'lstm') return 'lstm';
+  return 'ae';
+}
+
+function modelIcon(id) {
+  if (id === 'random_forest') return '🌲';
+  if (id === 'lstm') return '📈';
+  return '🔍';
+}
+
+function renderPage(data) {
+  const isDemo = data.demo_mode;
+  const main = document.getElementById('mainContent');
+
+  let html = `
+    <div class="mode-banner ${isDemo ? 'demo' : 'real'}">
+      <div class="mode-dot"></div>
+      <div>
+        <b>وضع التشغيل الحالي:</b> ${isDemo ? '🧪 Demo — بيانات محاكاة (Synthetic)' : '⚡ Real — هجين: بيانات حقيقية + محاكاة (Hybrid)'}<br>
+        <span style="font-size:.8rem; opacity:.8;">مصدر التدريب: ${data.data_source}</span>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>🔬 نماذج الذكاء الاصطناعي (AI Models)</h2>
+  `;
+
+  data.models.forEach(m => {
+    html += `
+      <div class="model-card ${modelClass(m.id)}">
+        <div class="model-header">
+          <div>
+            <div class="model-name">${modelIcon(m.id)} ${m.name}</div>
+            <div style="font-size:.8rem; color:var(--muted); margin-top:4px;">${m.task}</div>
+          </div>
+          <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+            <span class="model-lib">${m.library}</span>
+            <span class="status-badge ${m.status}">
+              ${m.status === 'ready' ? '✅ جاهز' : '❌ مفقود'}
+            </span>
+          </div>
+        </div>
+        <div class="model-grid">
+          <div>
+            <div class="info-row">
+              <div class="info-label">المدخلات (Features)</div>
+              <div class="features-list">
+                ${m.input_features.map(f => `<span class="feature-tag">${f}</span>`).join('')}
+              </div>
+            </div>
+            <div class="info-row">
+              <div class="info-label">المخرجات (Output)</div>
+              <div class="info-val accent">${m.output}</div>
+            </div>
+          </div>
+          <div>
+            <div class="info-row">
+              <div class="info-label">الدقة / الأداء</div>
+              <div class="info-val">${m.accuracy_note}</div>
+            </div>
+            <div class="info-row">
+              <div class="info-label">آخر تدريب</div>
+              <div class="info-val code">${m.last_trained}</div>
+            </div>
+            <div class="info-row">
+              <div class="info-label">ملف النموذج</div>
+              <div class="info-val code">${m.model_file}</div>
+            </div>
+            <div class="info-row">
+              <div class="info-label">مصدر بيانات التدريب</div>
+              <div class="info-val">${m.trained_on}</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    `;
+  });
+
+  html += `</div>`;
+
+  // Pipeline
+  html += `
+    <div class="card">
+      <h2>⚙️ خط أنابيب التدريب (Training Pipeline)</h2>
+      <div class="pipeline-steps" id="pipelineSteps">
+        ${data.pipeline.map((step, i) => `
+          <div class="step">
+            <div class="step-box">${i+1}. ${step}</div>
+            ${i < data.pipeline.length - 1 ? '<span class="step-arrow">←</span>' : ''}
+          </div>
+        `).join('')}
+      </div>
+    </div>
+  `;
+
+  // Comparison table
+  html += `
+    <div class="card">
+      <h2>📊 مقارنة أداء النماذج</h2>
+      <table style="width:100%; border-collapse:collapse; font-size:.85rem;">
+        <thead>
+          <tr style="border-bottom:1px solid var(--line);">
+            <th style="text-align:right; padding:10px; color:var(--muted);">النموذج</th>
+            <th style="text-align:right; padding:10px; color:var(--muted);">قبل (Synthetic بس)</th>
+            <th style="text-align:right; padding:10px; color:var(--muted);">بعد (Hybrid Real)</th>
+            <th style="text-align:right; padding:10px; color:var(--muted);">التحسن</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr style="border-bottom:1px dashed var(--line);">
+            <td style="padding:12px;">🌲 Random Forest (Occupancy)</td>
+            <td style="padding:12px; font-family:'Consolas',monospace; color:var(--orange);">Accuracy: 34%</td>
+            <td style="padding:12px; font-family:'Consolas',monospace; color:var(--muted);">ينتظر RSSI حقيقي</td>
+            <td style="padding:12px; color:var(--muted);">⏳ قريباً</td>
+          </tr>
+          <tr style="border-bottom:1px dashed var(--line);">
+            <td style="padding:12px;">📈 LSTM (Energy Forecast)</td>
+            <td style="padding:12px; font-family:'Consolas',monospace; color:var(--orange);">MAE: 0.0014</td>
+            <td style="padding:12px; font-family:'Consolas',monospace; color:var(--green);">MAE: 0.0005</td>
+            <td style="padding:12px; color:var(--green);">↑ تحسن 3x ✅</td>
+          </tr>
+          <tr>
+            <td style="padding:12px;">🔍 Autoencoder (Anomaly)</td>
+            <td style="padding:12px; font-family:'Consolas',monospace; color:var(--orange);">Threshold: 0.7091</td>
+            <td style="padding:12px; font-family:'Consolas',monospace; color:var(--green);">Threshold: 0.7021</td>
+            <td style="padding:12px; color:var(--green);">↑ أدق ✅</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  `;
+
+  main.innerHTML = html;
+
+  // hover sound on all interactive elements
+  document.querySelectorAll('a, button, .model-card, .step-box').forEach(el => {
+    el.addEventListener('mouseenter', playClick);
+  });
+}
+
+async function loadAIInfo() {
+  try {
+    const r = await fetch(API + '/api/ai-info');
+    const data = await r.json();
+    renderPage(data);
+  } catch(e) {
+    document.getElementById('mainContent').innerHTML = `
+      <div class="loading" style="color:var(--danger);">
+        ❌ تعذر الاتصال بالسيرفر. تأكد إن السيرفر شغال على المنفذ 8000.
+      </div>`;
+  }
+}
+
+// تصدير PDF
+function exportPDF() {
+  window.print();
+}
+
+// إضافة CSS للطباعة
+const printStyle = document.createElement('style');
+printStyle.textContent = `
+  @media print {
+    body { background: white !important; color: black !important; }
+    header, nav, .btn-pdf, .btn-export, .nav-links, footer { display: none !important; }
+    .card { border: 1px solid #ccc !important; background: white !important; box-shadow: none !important; }
+    .model-card { border: 1px solid #ddd !important; background: #f9f9f9 !important; }
+    .mode-banner { border: 1px solid #aaa !important; background: #f0f0f0 !important; color: #333 !important; }
+    .info-val.code, .feature-tag { color: #005533 !important; }
+    .info-val.accent { color: #003366 !important; }
+    .model-name { color: #000 !important; }
+    main { padding: 10px !important; }
+  }
+`;
+document.head.appendChild(printStyle);
+
+loadAIInfo();
+</script>
+
+</body>
+</html>

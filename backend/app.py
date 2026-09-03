@@ -248,6 +248,101 @@ def get_analytics_summary():
 
 
 # ============================================================
+# معلومات نماذج الذكاء الاصطناعي (AI Models Info)
+# ============================================================
+
+import os
+import json as _json
+from pathlib import Path
+
+@app.get("/api/ai-info")
+def get_ai_info():
+    """معلومات عن نماذج الذكاء الاصطناعي المحملة — الاسم والدقة وتاريخ التدريب"""
+    models_dir = Path("../models")
+    demo_mode  = os.environ.get("DEMO_MODE", "0") == "1"
+    data_source = "محاكاة (Synthetic)" if demo_mode else "هجين — حقيقي + محاكاة (Hybrid Real)"
+
+    def file_date(path: Path) -> str:
+        try:
+            ts = path.stat().st_mtime
+            from datetime import datetime
+            return datetime.fromtimestamp(ts).strftime("%Y-%m-%d %H:%M")
+        except:
+            return "غير متاح"
+
+    # قراءة threshold الـ Autoencoder من ملف الضبط
+    anomaly_threshold = None
+    anomaly_cfg = models_dir / "anomaly_config.json"
+    if anomaly_cfg.exists():
+        try:
+            anomaly_threshold = _json.loads(anomaly_cfg.read_text())
+        except:
+            pass
+
+    # ملفات النماذج
+    rf_path   = models_dir / "occupancy_classifier.joblib"
+    lstm_path = models_dir / "energy_forecast_lstm.keras"
+    ae_path   = models_dir / "tile_anomaly_autoencoder.keras"
+
+    models_info = [
+        {
+            "id": "random_forest",
+            "name": "Random Forest Classifier",
+            "task": "تصنيف الإشغال — يحدد هل البلاطة مشغولة أم لا",
+            "library": "scikit-learn",
+            "input_features": ["mean RSSI", "std RSSI", "min RSSI", "max RSSI", "range RSSI", "mean_abs_diff"],
+            "output": "empty / occupied",
+            "accuracy_note": "دقة 34% على Synthetic بس — ستتحسن لـ 90%+ مع داتا RSSI حقيقية",
+            "trained_on": data_source,
+            "model_file": str(rf_path.name) if rf_path.exists() else "غير موجود",
+            "last_trained": file_date(rf_path) if rf_path.exists() else "لم يُدرَّب بعد",
+            "status": "ready" if rf_path.exists() else "missing",
+        },
+        {
+            "id": "lstm",
+            "name": "LSTM Forecast Network",
+            "task": "التنبؤ بالطاقة — يتوقع كمية الواط القادمة",
+            "library": "TensorFlow / Keras",
+            "input_features": ["power_mw (تسلسل زمني — نافذة 24 نقطة)"],
+            "output": "forecast_w (التوقع المستقبلي بالواط)",
+            "accuracy_note": "Validation MAE ≈ 0.0005 (بعد التدريب الهجين)",
+            "trained_on": data_source,
+            "model_file": str(lstm_path.name) if lstm_path.exists() else "غير موجود",
+            "last_trained": file_date(lstm_path) if lstm_path.exists() else "لم يُدرَّب بعد",
+            "status": "ready" if lstm_path.exists() else "missing",
+        },
+        {
+            "id": "autoencoder",
+            "name": "Autoencoder Anomaly Detector",
+            "task": "كشف الأعطال — يكتشف أي شذوذ في قراءات الطاقة",
+            "library": "TensorFlow / Keras",
+            "input_features": ["power_mw (نافذة 30 نقطة)"],
+            "output": "anomaly score — يُصدر إنذاراً لو تجاوز الـ Threshold",
+            "accuracy_note": f"Anomaly Threshold = {anomaly_threshold.get('threshold', 'N/A') if anomaly_threshold else 'N/A'}",
+            "trained_on": data_source,
+            "model_file": str(ae_path.name) if ae_path.exists() else "غير موجود",
+            "last_trained": file_date(ae_path) if ae_path.exists() else "لم يُدرَّب بعد",
+            "status": "ready" if ae_path.exists() else "missing",
+        },
+    ]
+
+    return {
+        "data_source": data_source,
+        "demo_mode": demo_mode,
+        "models": models_info,
+        "pipeline": [
+            "generate_training_data.py → يولد بيانات محاكاة",
+            "clean_data.py → Kalman Filter + Feature Extraction",
+            "train_occupancy_classifier.py → Random Forest + SVM",
+            "train_lstm_forecast.py → LSTM (50 epochs)",
+            "train_autoencoder_anomaly.py → Autoencoder (50 epochs)",
+        ]
+    }
+
+
+
+
+# ============================================================
 # تقديم ملفات لوحة التحكم (Frontend)
 # ============================================================
 app.mount("/", StaticFiles(directory="../frontend", html=True), name="frontend")
