@@ -26,6 +26,25 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# منع المتصفح من حفظ الصفحات (No Cache) — عشان التعديلات تظهر فوراً بدون Ctrl+Shift+R
+from fastapi import Response as _Response
+from starlette.middleware.base import BaseHTTPMiddleware
+
+class NoCacheMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request, call_next):
+        response = await call_next(request)
+        path = request.url.path
+        # لو الطلب لملف HTML — اجبر المتصفح يحمل نسخة جديدة دايماً
+        if path.endswith(".html") or path == "/" or not "." in path.split("/")[-1]:
+            response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+            response.headers["Pragma"] = "no-cache"
+            response.headers["Expires"] = "0"
+        return response
+
+app.add_middleware(NoCacheMiddleware)
+
+
+
 sim = PowerStepSimulator()
 
 # إعدادات الإيميل (اختياري — غيّرها لإعداداتك الحقيقية لتفعيل الإشعارات)
